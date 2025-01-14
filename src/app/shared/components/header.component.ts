@@ -19,7 +19,6 @@ import { NotificationService } from 'src/app/services/notification.service';
           <h4>{{ notification.title }}</h4>
           <span>{{ notification.message }}</span>
           <button
-            *ngIf="!notification.read"
             (click)="markNotificationAsRead(notification)"
           >
             Mark as Read
