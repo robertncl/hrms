@@ -1,4 +1,4 @@
-import { NgFor, NgIf } from '@angular/common';
+import { NgFor } from '@angular/common';
 import { Component, signal, inject } from '@angular/core';
 import { Notification } from 'src/app/infrastructure/types/notification';
 import { NotificationService } from 'src/app/services/notification.service';
@@ -30,7 +30,7 @@ import { NotificationService } from 'src/app/services/notification.service';
     </dialog>
   `,
   standalone: true,
-  imports: [NgFor, NgIf],
+  imports: [NgFor],
 })
 export class HeaderComponent {
   private readonly notificationService = inject(NotificationService);
