@@ -1,4 +1,4 @@
-import { NgFor } from '@angular/common';
+import { NgFor, NgIf } from '@angular/common';
 import { Component, signal, inject } from '@angular/core';
 import { Notification } from 'src/app/infrastructure/types/notification';
 import { NotificationService } from 'src/app/services/notification.service';
@@ -19,6 +19,7 @@ import { NotificationService } from 'src/app/services/notification.service';
           <h4>{{ notification.title }}</h4>
           <span>{{ notification.message }}</span>
           <button
+            *ngIf="!notification.read"
             (click)="markNotificationAsRead(notification)"
           >
             Mark as Read
@@ -29,7 +30,7 @@ import { NotificationService } from 'src/app/services/notification.service';
     </dialog>
   `,
   standalone: true,
-  imports: [NgFor],
+  imports: [NgFor, NgIf],
 })
 export class HeaderComponent {
   private readonly notificationService = inject(NotificationService);

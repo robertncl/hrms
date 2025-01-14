@@ -1,4 +1,4 @@
-import { AsyncPipe, NgComponentOutlet, NgFor, NgOptimizedImage } from '@angular/common';
+import { AsyncPipe, NgComponentOutlet, NgFor, NgIf, NgOptimizedImage } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { EmployeeService } from 'src/app/services/employee.service';
@@ -35,7 +35,7 @@ import { TruncateDirective } from 'src/app/shared/directives/truncate.directive'
     <ng-container *ngComponentOutlet="confirmDialog"></ng-container>
   `,
   standalone: true,
-  imports: [AsyncPipe, NgFor, NgComponentOutlet, RouterLink, TruncateDirective, EmployeeNotAvailableDirective, NgOptimizedImage],
+  imports: [AsyncPipe, NgFor, NgIf, NgComponentOutlet, RouterLink, TruncateDirective, EmployeeNotAvailableDirective, NgOptimizedImage],
 })
 export class EmployeeListComponent {
   employeeService = inject(EmployeeService);

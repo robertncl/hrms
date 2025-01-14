@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { NgIf } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -15,7 +16,7 @@ import { FormsModule } from '@angular/forms';
         </div>
     `,
     standalone: true,
-    imports: [FormsModule],
+    imports: [FormsModule, NgIf],
 })
 export class RegistrationComponent {
     credentials = { email: '', password: '', confirmPassword: '' };
