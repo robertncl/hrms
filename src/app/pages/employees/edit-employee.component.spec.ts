@@ -11,12 +11,14 @@ describe('EditEmployeeComponent', () => {
   let fixture: ComponentFixture<EditEmployeeComponent>;
 
   const mockEmployee: Employee = {
-    id: '1',
+    id: 1,
     firstName: 'John',
     lastName: 'Doe',
     email: 'john.doe@example.com',
     position: 'Developer',
     level: 'Senior',
+    isAvailable: true,
+    profilePicture: '',
   };
 
   const mockPermissionsService = {
