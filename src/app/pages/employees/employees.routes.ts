@@ -13,5 +13,9 @@ export const routes: Routes = [
         resolve: { employee: employeeDetailsResolver },
     },
     { path: 'create', component: CreateEmployeeComponent },
-    { path: 'edit', component: EditEmployeeComponent },
+    {
+        path: 'edit/:id',
+        component: EditEmployeeComponent,
+        resolve: { employee: employeeDetailsResolver },
+    },
 ];

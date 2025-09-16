@@ -1,6 +1,8 @@
 import { Component, inject, DestroyRef, OnInit } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
+import { Employee } from 'src/app/infrastructure/types/employee';
 import { EmployeeForm } from 'src/app/infrastructure/types/employee-form';
 import { PermissionsService } from 'src/app/services/permissions.service';
 
@@ -12,6 +14,7 @@ import { PermissionsService } from 'src/app/services/permissions.service';
 export class EditEmployeeComponent implements OnInit {
   permissionsService = inject(PermissionsService);
   destroyRef = inject(DestroyRef);
+  route = inject(ActivatedRoute);
   form = new FormGroup<EmployeeForm>({
     firstName: new FormControl('', {
       nonNullable: true,
@@ -24,6 +27,8 @@ export class EditEmployeeComponent implements OnInit {
   });
 
   ngOnInit() {
+    const employee = this.route.snapshot.data['employee'] as Employee;
+    this.form.patchValue(employee);
     this.permissionsService.hasPermission('EditEmployeePrivateDetails').pipe(
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(hasPermission => {
