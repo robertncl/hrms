@@ -5,6 +5,8 @@ import { EditEmployeeComponent } from './edit-employee.component';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { PermissionsService } from 'src/app/services/permissions.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { IMAGE_LOADER } from '@angular/common';
+import { imageLoader } from 'src/app/app.config';
 
 describe('EditEmployeeComponent', () => {
   let component: EditEmployeeComponent;
@@ -42,6 +44,10 @@ describe('EditEmployeeComponent', () => {
         {
           provide: PermissionsService,
           useValue: mockPermissionsService
+        },
+        {
+          provide: IMAGE_LOADER,
+          useValue: imageLoader
         }
       ]
     })
@@ -62,5 +68,10 @@ describe('EditEmployeeComponent', () => {
     expect(component.form.value.email).toBe(mockEmployee.email);
     expect(component.form.value.position).toBe(mockEmployee.position);
     expect(component.form.value.level).toBe(mockEmployee.level);
+  });
+
+  it('should have a custom image loader', () => {
+    const customImageLoader = TestBed.inject(IMAGE_LOADER);
+    expect(customImageLoader).toBe(imageLoader);
   });
 });
