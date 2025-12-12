@@ -1,4 +1,4 @@
-import { AsyncPipe, NgComponentOutlet, NgFor, NgIf, NgOptimizedImage } from '@angular/common';
+import { AsyncPipe, NgComponentOutlet, NgOptimizedImage } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { EmployeeService } from 'src/app/services/employee.service';
@@ -18,24 +18,26 @@ import { TruncateDirective } from 'src/app/shared/directives/truncate.directive'
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let employee of employees$ | async">
-          <td>
-            <img [ngSrc]="employee.profilePicture" width="20" height="20"/>
-            <a [routerLink]="['/employees/details', employee.id]">
-              {{ employee.firstName }} {{ employee.lastName }}
-            </a>
-          </td>
-          <td appTruncate [limit]="10">{{ employee.position }}</td>
-          <td>
-            <button (click)="showConfirmationDialog()">Delete</button>
-          </td>
-        </tr>
+        @for (employee of employees$ | async; track employee) {
+          <tr>
+            <td>
+              <img [ngSrc]="employee.profilePicture" width="20" height="20"/>
+              <a [routerLink]="['/employees/details', employee.id]">
+                {{ employee.firstName }} {{ employee.lastName }}
+              </a>
+            </td>
+            <td appTruncate [limit]="10">{{ employee.position }}</td>
+            <td>
+              <button (click)="showConfirmationDialog()">Delete</button>
+            </td>
+          </tr>
+        }
       </tbody>
     </table>
     <ng-container *ngComponentOutlet="confirmDialog"></ng-container>
-  `,
+    `,
   standalone: true,
-  imports: [AsyncPipe, NgFor, NgIf, NgComponentOutlet, RouterLink, TruncateDirective, EmployeeNotAvailableDirective, NgOptimizedImage],
+  imports: [AsyncPipe, NgComponentOutlet, RouterLink, TruncateDirective, EmployeeNotAvailableDirective, NgOptimizedImage],
 })
 export class EmployeeListComponent {
   employeeService = inject(EmployeeService);

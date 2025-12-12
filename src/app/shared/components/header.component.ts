@@ -1,4 +1,4 @@
-import { NgFor, NgIf } from '@angular/common';
+
 import { Component, signal, inject } from '@angular/core';
 import { Notification } from 'src/app/infrastructure/types/notification';
 import { NotificationService } from 'src/app/services/notification.service';
@@ -15,22 +15,25 @@ import { NotificationService } from 'src/app/services/notification.service';
     <dialog [open]="notificationsOpen()">
       <h3>Notifications</h3>
       <ul>
-        <li *ngFor="let notification of notifications()">
-          <h4>{{ notification.title }}</h4>
-          <span>{{ notification.message }}</span>
-          <button
-            *ngIf="!notification.read"
-            (click)="markNotificationAsRead(notification)"
-          >
-            Mark as Read
-          </button>
-        </li>
+        @for (notification of notifications(); track notification) {
+          <li>
+            <h4>{{ notification.title }}</h4>
+            <span>{{ notification.message }}</span>
+            @if (!notification.read) {
+              <button
+                (click)="markNotificationAsRead(notification)"
+                >
+                Mark as Read
+              </button>
+            }
+          </li>
+        }
       </ul>
       <button (click)="notificationsOpen.set(false)">Close</button>
     </dialog>
-  `,
+    `,
   standalone: true,
-  imports: [NgFor, NgIf],
+  imports: [],
 })
 export class HeaderComponent {
   private readonly notificationService = inject(NotificationService);

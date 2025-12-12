@@ -1,4 +1,4 @@
-import { AsyncPipe, NgFor, NgIf } from '@angular/common';
+import { AsyncPipe } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges, inject, numberAttribute } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Observable, Subject, takeUntil } from 'rxjs';
@@ -11,23 +11,26 @@ import { ProjectCardComponent } from 'src/app/shared/components/project-card.com
   template: `
     <div class="project-details">
       <h3>Project Details</h3>
-      <div *ngIf="project$ | async as project">
-        <span>Project Name: {{ project.name }}</span>
-        <span>Project Description: {{ project.description }}</span>
-        <span>Logo: {{ project.image }}</span>
-        <div class="subprojects">
-          <span>Subprojects:</span>
-          <app-project-card
-            *ngFor="let subProjectId of project.subProjectIds"
-            [projectId]="subProjectId"
-          >
-          </app-project-card>
+      @if (project$ | async; as project) {
+        <div>
+          <span>Project Name: {{ project.name }}</span>
+          <span>Project Description: {{ project.description }}</span>
+          <span>Logo: {{ project.image }}</span>
+          <div class="subprojects">
+            <span>Subprojects:</span>
+            @for (subProjectId of project.subProjectIds; track subProjectId) {
+              <app-project-card
+                [projectId]="subProjectId"
+                >
+              </app-project-card>
+            }
+          </div>
         </div>
-      </div>
+      }
     </div>
-  `,
+    `,
   standalone: true,
-  imports: [NgIf, NgFor, AsyncPipe, ProjectCardComponent],
+  imports: [AsyncPipe, ProjectCardComponent],
 })
 export class ProjectDetailsComponent implements OnChanges {
   @Input({transform: numberAttribute}) id!: number;

@@ -1,4 +1,4 @@
-import { AsyncPipe, NgIf, NgOptimizedImage } from '@angular/common';
+import { AsyncPipe, NgOptimizedImage } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -8,14 +8,16 @@ import { ProjectService } from 'src/app/services/project.service';
 @Component({
     selector: 'app-project-card',
     template: `
-        <div *ngIf="project$ | async as project" class="card">
+        @if (project$ | async; as project) {
+          <div class="card">
             <img [ngSrc]="project.image" width="100" height="100" loading="eager" sizes="100vw, 50vw"/>
             <div class="card-body">
-                <a [routerLink]="['/work/projects', project.id]">{{ project.name }}</a>
+              <a [routerLink]="['/work/projects', project.id]">{{ project.name }}</a>
             </div>
-        </div>
-    `,
-    imports: [NgIf, AsyncPipe, RouterLink, NgOptimizedImage],
+          </div>
+        }
+        `,
+    imports: [AsyncPipe, RouterLink, NgOptimizedImage],
     standalone: true,
 })
 export class ProjectCardComponent implements OnChanges {

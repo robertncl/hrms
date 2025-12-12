@@ -1,4 +1,4 @@
-import { AsyncPipe, NgFor } from '@angular/common';
+import { AsyncPipe } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -22,18 +22,20 @@ import { createSearch } from 'src/app/shared/functions/create-search';
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let candidate of candidates$ | async">
-          <td>
-            <a [routerLink]="[candidate.id]">{{ candidate.firstName }} {{ candidate.lastName }}</a>
-          </td>
-          <td>{{ candidate.email }}</td>
-          <td>{{ candidate.position }}</td>
-        </tr>
+        @for (candidate of candidates$ | async; track candidate) {
+          <tr>
+            <td>
+              <a [routerLink]="[candidate.id]">{{ candidate.firstName }} {{ candidate.lastName }}</a>
+            </td>
+            <td>{{ candidate.email }}</td>
+            <td>{{ candidate.position }}</td>
+          </tr>
+        }
       </tbody>
     </table>
-  `,
+    `,
   standalone: true,
-  imports: [NgFor, AsyncPipe, RouterLink, ReactiveFormsModule],
+  imports: [AsyncPipe, RouterLink, ReactiveFormsModule],
 })
 export class CandidatesListComponent implements OnInit {
   private readonly candidateService = inject(CandidateService);

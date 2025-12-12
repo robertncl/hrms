@@ -1,4 +1,4 @@
-import { AsyncPipe, NgFor, NgOptimizedImage } from '@angular/common';
+import { AsyncPipe, NgOptimizedImage } from '@angular/common';
 import { Component, Input, OnInit, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -19,13 +19,15 @@ import { ProjectCardComponent } from 'src/app/shared/components/project-card.com
     </div>
     <div class="projects">
       <h3>Projects</h3>
-      <div *ngFor="let project of projects$ | async" class="project">
-        <app-project-card [projectId]="project.id"></app-project-card>
-      </div>
+      @for (project of projects$ | async; track project) {
+        <div class="project">
+          <app-project-card [projectId]="project.id"></app-project-card>
+        </div>
+      }
     </div>
-  `,
+    `,
   standalone: true,
-  imports: [NgOptimizedImage, NgFor, AsyncPipe, ProjectCardComponent],
+  imports: [NgOptimizedImage, AsyncPipe, ProjectCardComponent],
 })
 export class EmployeeDetailsComponent implements OnInit {
   projectService = inject(ProjectService);

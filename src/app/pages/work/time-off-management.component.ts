@@ -7,7 +7,7 @@ import {
   Injector,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { DatePipe, NgFor, NgIf } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { switchMap } from 'rxjs/operators';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
@@ -27,7 +27,7 @@ import { TimeOffManagementService } from 'src/app/services/time-off-management.s
         [ngModel]="selectedType()"
         (ngModelChange)="selectedType.set($any($event))"
         placeholder="Filter by request type"
-      >
+        >
         <option value="">All</option>
         <option value="Vacation">Vacation</option>
         <option value="Sick Leave">Sick Leave</option>
@@ -49,34 +49,38 @@ import { TimeOffManagementService } from 'src/app/services/time-off-management.s
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let request of requests()">
-          <td>{{ request.employeeId }}</td>
-          <td>{{ request.startDate | date }}</td>
-          <td>{{ request.endDate | date }}</td>
-          <td>{{ request.type }}</td>
-          <td>{{ request.status }}</td>
-          <td>{{ request.comment }}</td>
-          <td>
-            <button
-              *ngIf="request.status === 'Pending'"
-              (click)="approveRequest(request)"
-            >
-              Approve
-            </button>
-            <button
-              *ngIf="request.status === 'Pending'"
-              (click)="rejectRequest(request)"
-            >
-              Reject
-            </button>
-            <button (click)="deleteRequest(request)">Delete</button>
-          </td>
-        </tr>
+        @for (request of requests(); track request) {
+          <tr>
+            <td>{{ request.employeeId }}</td>
+            <td>{{ request.startDate | date }}</td>
+            <td>{{ request.endDate | date }}</td>
+            <td>{{ request.type }}</td>
+            <td>{{ request.status }}</td>
+            <td>{{ request.comment }}</td>
+            <td>
+              @if (request.status === 'Pending') {
+                <button
+                  (click)="approveRequest(request)"
+                  >
+                  Approve
+                </button>
+              }
+              @if (request.status === 'Pending') {
+                <button
+                  (click)="rejectRequest(request)"
+                  >
+                  Reject
+                </button>
+              }
+              <button (click)="deleteRequest(request)">Delete</button>
+            </td>
+          </tr>
+        }
       </tbody>
     </table>
-  `,
+    `,
   standalone: true,
-  imports: [NgFor, NgIf, DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule],
 })
 export class TimeOffManagementComponent {
   private readonly timeOffsService = inject(TimeOffManagementService);
