@@ -1,4 +1,4 @@
-import { ApplicationConfig } from '@angular/core';
+import { ApplicationConfig, APP_INITIALIZER, inject } from '@angular/core';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { IMAGE_LOADER } from '@angular/common';
@@ -6,6 +6,7 @@ import { IMAGE_LOADER } from '@angular/common';
 import { routes } from './app.routes';
 import { addApiUrl } from './shared/interceptors/api-url.interceptor';
 import { authInterceptor } from './shared/interceptors/auth.interceptor';
+import { AuthService } from './services/auth.service';
 import { TruncateLimit } from './shared/directives/truncate.directive';
 import { ImageLoaderConfig } from '@angular/common';
 
@@ -23,6 +24,14 @@ export const appConfig: ApplicationConfig = {
     {
       provide: IMAGE_LOADER,
       useValue: imageLoader,
-    }
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: () => {
+        const authService = inject(AuthService);
+        return () => authService.restoreSession();
+      },
+      multi: true,
+    },
   ],
 };
