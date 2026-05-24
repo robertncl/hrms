@@ -9,8 +9,11 @@ export const employeePermissionsInterceptor: HttpInterceptorFn = (
   req: HttpRequest<any>,
   next: HttpHandlerFn
 ) => {
-  return next(req).pipe(
-    hasPermissions(['CreateEmployee', 'DeleteEmployee', 'EditEmployeeGeneralDetails', 'ViewEmployees']),
-  );
+    if (!req.url.includes('/employees')) {
+        return next(req);
+    }
+    return next(req).pipe(
+        hasPermissions(['CreateEmployee', 'DeleteEmployee', 'EditEmployeeGeneralDetails', 'ViewEmployees']),
+    );
 };
 

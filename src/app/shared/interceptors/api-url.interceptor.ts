@@ -1,8 +1,6 @@
 import { HttpHandlerFn, HttpRequest } from '@angular/common/http';
+import { environment } from 'src/environments/environment';
 
 export function addApiUrl(req: HttpRequest<any>, next: HttpHandlerFn) {
-    const url = req.url;
-    const newUrl = 'http://localhost:3000' + url;
-    const newReq = req.clone({ url: newUrl });
-    return next(newReq);
+    return next(req.clone({ url: environment.apiUrl + req.url }));
 }

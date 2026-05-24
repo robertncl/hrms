@@ -6,6 +6,7 @@ import { IMAGE_LOADER } from '@angular/common';
 import { routes } from './app.routes';
 import { addApiUrl } from './shared/interceptors/api-url.interceptor';
 import { authInterceptor } from './shared/interceptors/auth.interceptor';
+import { employeePermissionsInterceptor } from './shared/interceptors/employee-permissions.interceptor';
 import { AuthService } from './services/auth.service';
 import { TruncateLimit } from './shared/directives/truncate.directive';
 import { ImageLoaderConfig } from '@angular/common';
@@ -18,7 +19,7 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes, withComponentInputBinding()),
     provideHttpClient(
-      withInterceptors([addApiUrl, authInterceptor]),
+      withInterceptors([addApiUrl, authInterceptor, employeePermissionsInterceptor]),
     ),
     { provide: TruncateLimit, useValue: 70 },
     {

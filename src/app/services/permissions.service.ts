@@ -4,9 +4,9 @@ import { Permissions } from '../infrastructure/types/permissions';
 
 @Injectable({providedIn: 'root'})
 export class PermissionsService {
-    private readonly permissions$ = new BehaviorSubject<Partial<Record<Permissions, boolean>>>({
-        ViewEmployees: true,
-    });
+    // Permissions are populated after login via setPermissions().
+    // Starting empty ensures no access is granted before the server responds.
+    private readonly permissions$ = new BehaviorSubject<Partial<Record<Permissions, boolean>>>({});
 
     hasPermission(permission: Permissions) {
         return this.permissions$.pipe(map(permissions => permissions[permission] ?? false));
