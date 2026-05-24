@@ -6,7 +6,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
     template: `
         <div class="file-upload">
           <label for="upload">{{ label }}</label>
-          <input type="file" id="upload" (change)="onFileSelected($event)" />
+          <input type="file" id="upload" [attr.accept]="accept.join(',')" (change)="onFileSelected($event)" />
           @if (errorMessage) {
             <span class="error">
               {{ errorMessage }}

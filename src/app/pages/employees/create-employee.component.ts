@@ -7,7 +7,7 @@ import { EmployeeService } from 'src/app/services/employee.service';
 @Component({
   selector: 'app-create-employee',
   template: `
-    <input type="text" placeholder="First Name" [formControl]="form.controls.email" />
+    <input type="text" placeholder="First Name" [formControl]="form.controls.firstName" />
   `,
   standalone: true,
   imports: [ReactiveFormsModule],
