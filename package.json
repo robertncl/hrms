@@ -23,9 +23,9 @@
     "zone.js": "^0.16.2"
   },
   "devDependencies": {
-    "@angular/build": "^22.0.0",
-    "@angular/cli": "^22.0.0",
-    "@angular/compiler-cli": "^22.0.0",
+    "@angular/build": "^22.0.3",
+    "@angular/cli": "^22.0.3",
+    "@angular/compiler-cli": "^22.0.2",
     "@types/jasmine": "^6.0.0",
     "puppeteer": "^25.1.0",
     "jasmine-core": "^6.2.0",
