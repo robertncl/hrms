@@ -9,7 +9,7 @@ import { NotificationService } from 'src/app/services/notification.service';
     <header>
       <h2>HRMS</h2>
       <button (click)="notificationsOpen.set(true)" title="View Notifications">
-        You have {{ unreadNotifications.length }} unread notifications
+        You have {{ unreadNotifications().length }} unread notifications
       </button>
     </header>
     <dialog [open]="notificationsOpen()">
