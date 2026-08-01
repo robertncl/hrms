@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { EmployeeNotAvailableDirective } from './employee-not-available.directive';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { Employee } from 'src/app/infrastructure/types/employee';
+import { flushChanges } from 'src/testing/flush-changes';
 
 const mockEmployee: Employee = {
   id: 1,
@@ -48,7 +49,7 @@ describe('EmployeeNotAvailableDirective', () => {
     const fixture: ComponentFixture<HostComponent> = TestBed.createComponent(HostComponent);
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
+    flushChanges(fixture);
 
     expect(mockEmployeeService.getEmployee).toHaveBeenCalledWith(1);
     const link: HTMLAnchorElement = fixture.nativeElement.querySelector('a');
@@ -72,7 +73,7 @@ describe('EmployeeNotAvailableDirective', () => {
     const fixture: ComponentFixture<HostComponent> = TestBed.createComponent(HostComponent);
     fixture.detectChanges();
     await fixture.whenStable();
-    fixture.detectChanges();
+    flushChanges(fixture);
 
     const link: HTMLAnchorElement = fixture.nativeElement.querySelector('a');
     expect(link.classList.contains('not-available')).toBeFalse();

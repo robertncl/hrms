@@ -3,6 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { LoaderDirective } from './loader.directive';
 import { LoaderComponent } from '../components/loader.component';
+import { flushChanges } from 'src/testing/flush-changes';
 
 @Component({
   standalone: true,
@@ -33,7 +34,7 @@ describe('LoaderDirective', () => {
 
   it('should pass the loading input through to the loader component', () => {
     fixture.componentInstance.isLoading = true;
-    fixture.detectChanges();
+    flushChanges(fixture);
     const loaderComponent = fixture.debugElement.query(By.directive(LoaderComponent));
     expect(loaderComponent.componentInstance.loading).toBeTrue();
   });
@@ -44,8 +45,7 @@ describe('LoaderDirective', () => {
     expect(loaderComponent.componentInstance.loading).toBeFalse();
 
     fixture.componentInstance.isLoading = true;
-    fixture.detectChanges();
-    fixture.detectChanges();
+    flushChanges(fixture);
     loaderComponent = fixture.debugElement.query(By.directive(LoaderComponent));
     expect(loaderComponent.componentInstance.loading).toBeTrue();
   });
@@ -55,8 +55,7 @@ describe('LoaderDirective', () => {
     expect(fixture.nativeElement.querySelector('.blocker')).toBeFalsy();
 
     fixture.componentInstance.isLoading = true;
-    fixture.detectChanges();
-    fixture.detectChanges();
+    flushChanges(fixture);
     expect(fixture.nativeElement.querySelector('.blocker')).toBeTruthy();
   });
 });

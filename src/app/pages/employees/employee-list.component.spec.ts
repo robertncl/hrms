@@ -71,13 +71,12 @@ describe('EmployeeListComponent', () => {
     expect(component.confirmDialog).toBeNull();
   });
 
-  it('should open the confirmation dialog when the delete button is clicked', async () => {
+  it('should invoke showConfirmationDialog when the delete button is clicked', () => {
+    spyOn(component, 'showConfirmationDialog');
     const deleteButton: HTMLButtonElement = fixture.debugElement.nativeElement.querySelector('button');
     deleteButton.click();
-    await fixture.whenStable();
 
-    expect(component.isConfirmationOpen).toBeTrue();
-    expect(component.confirmDialog).toBeTruthy();
+    expect(component.showConfirmationDialog).toHaveBeenCalled();
   });
 
   it('should call showConfirmationDialog directly and set isConfirmationOpen', async () => {

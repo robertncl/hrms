@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { FileUploadComponent } from './file-upload.component';
+import { flushChanges } from 'src/testing/flush-changes';
 
 function createFile(name: string, type: string): File {
   return new File(['content'], name, { type });
@@ -79,8 +80,7 @@ describe('FileUploadComponent', () => {
 
   it('should render the error message and accepted file types when errorMessage is set', () => {
     component.errorMessage = 'Invalid file type';
-    fixture.detectChanges();
-    fixture.detectChanges();
+    flushChanges(fixture);
 
     const error = fixture.debugElement.query(By.css('.error'));
     expect(error).toBeTruthy();

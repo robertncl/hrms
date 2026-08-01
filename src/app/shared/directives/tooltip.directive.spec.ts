@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TooltipDirective } from './tooltip.directive';
+import { flushChanges } from 'src/testing/flush-changes';
 
 @Component({
   standalone: true,
@@ -31,14 +32,14 @@ describe('TooltipDirective', () => {
   it('should bind the tooltip input to the title attribute', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement.querySelector('appTooltip');
-    expect(el.title).toBe('Hello world');
+    expect(el.getAttribute('title')).toBe('Hello world');
   });
 
   it('should update the title attribute when the tooltip input changes', () => {
     fixture.detectChanges();
     fixture.componentInstance.tooltipText = 'Updated tooltip';
-    fixture.detectChanges();
+    flushChanges(fixture);
     const el: HTMLElement = fixture.nativeElement.querySelector('appTooltip');
-    expect(el.title).toBe('Updated tooltip');
+    expect(el.getAttribute('title')).toBe('Updated tooltip');
   });
 });

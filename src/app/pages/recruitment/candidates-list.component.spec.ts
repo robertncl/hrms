@@ -4,6 +4,7 @@ import { of } from 'rxjs';
 import { CandidatesListComponent } from './candidates-list.component';
 import { CandidateService } from 'src/app/services/candidate.service';
 import { Candidate } from 'src/app/infrastructure/types/candidate';
+import { flushChanges } from 'src/testing/flush-changes';
 
 describe('CandidatesListComponent', () => {
   let component: CandidatesListComponent;
@@ -78,8 +79,7 @@ describe('CandidatesListComponent', () => {
   it('should search candidates by name after debounce and update the list', fakeAsync(() => {
     component.searchControl.setValue('John');
     tick(500);
-    fixture.detectChanges();
-    fixture.detectChanges();
+    flushChanges(fixture);
 
     expect(mockCandidateService.getCandidatesByName).toHaveBeenCalledWith('John');
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
@@ -95,7 +95,7 @@ describe('CandidatesListComponent', () => {
     mockCandidateService.getCandidates.calls.reset();
     component.searchControl.setValue('');
     tick(500);
-    fixture.detectChanges();
+    flushChanges(fixture);
 
     expect(mockCandidateService.getCandidates).toHaveBeenCalled();
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
