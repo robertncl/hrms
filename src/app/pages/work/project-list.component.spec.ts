@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { IMAGE_LOADER } from '@angular/common';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { ProjectListComponent } from './project-list.component';
 import { ProjectService } from 'src/app/services/project.service';
@@ -42,6 +43,7 @@ describe('ProjectListComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ProjectListComponent, NoopAnimationsModule],
       providers: [
+        provideRouter([]),
         { provide: ProjectService, useValue: mockProjectService },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],

@@ -37,6 +37,9 @@ describe('EmployeeListComponent', () => {
 
   const mockEmployeeService = {
     getEmployees: jasmine.createSpy('getEmployees').and.returnValue(of(mockEmployees)),
+    getEmployee: jasmine.createSpy('getEmployee').and.callFake((id: number) =>
+      of(mockEmployees.find((employee) => employee.id === id)),
+    ),
   };
 
   beforeEach(async () => {

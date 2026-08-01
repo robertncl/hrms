@@ -45,6 +45,7 @@ describe('LoaderDirective', () => {
 
     fixture.componentInstance.isLoading = true;
     fixture.detectChanges();
+    fixture.detectChanges();
     loaderComponent = fixture.debugElement.query(By.directive(LoaderComponent));
     expect(loaderComponent.componentInstance.loading).toBeTrue();
   });
@@ -54,6 +55,7 @@ describe('LoaderDirective', () => {
     expect(fixture.nativeElement.querySelector('.blocker')).toBeFalsy();
 
     fixture.componentInstance.isLoading = true;
+    fixture.detectChanges();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.blocker')).toBeTruthy();
   });

@@ -80,6 +80,7 @@ describe('FileUploadComponent', () => {
   it('should render the error message and accepted file types when errorMessage is set', () => {
     component.errorMessage = 'Invalid file type';
     fixture.detectChanges();
+    fixture.detectChanges();
 
     const error = fixture.debugElement.query(By.css('.error'));
     expect(error).toBeTruthy();

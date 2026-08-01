@@ -47,6 +47,7 @@ describe('EmployeeNotAvailableDirective', () => {
 
     const fixture: ComponentFixture<HostComponent> = TestBed.createComponent(HostComponent);
     fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     expect(mockEmployeeService.getEmployee).toHaveBeenCalledWith(1);
@@ -70,6 +71,7 @@ describe('EmployeeNotAvailableDirective', () => {
 
     const fixture: ComponentFixture<HostComponent> = TestBed.createComponent(HostComponent);
     fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     const link: HTMLAnchorElement = fixture.nativeElement.querySelector('a');

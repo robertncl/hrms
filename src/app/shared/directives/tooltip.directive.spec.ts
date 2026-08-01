@@ -31,7 +31,7 @@ describe('TooltipDirective', () => {
   it('should bind the tooltip input to the title attribute', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement.querySelector('appTooltip');
-    expect(el.getAttribute('title')).toBe('Hello world');
+    expect(el.title).toBe('Hello world');
   });
 
   it('should update the title attribute when the tooltip input changes', () => {
@@ -39,6 +39,6 @@ describe('TooltipDirective', () => {
     fixture.componentInstance.tooltipText = 'Updated tooltip';
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement.querySelector('appTooltip');
-    expect(el.getAttribute('title')).toBe('Updated tooltip');
+    expect(el.title).toBe('Updated tooltip');
   });
 });

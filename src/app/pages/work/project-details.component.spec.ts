@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { IMAGE_LOADER } from '@angular/common';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { ProjectDetailsComponent } from './project-details.component';
 import { ProjectService } from 'src/app/services/project.service';
@@ -32,6 +33,7 @@ describe('ProjectDetailsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ProjectDetailsComponent, NoopAnimationsModule],
       providers: [
+        provideRouter([]),
         { provide: ProjectService, useValue: mockProjectService },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],
@@ -69,7 +71,7 @@ describe('ProjectDetailsComponent', () => {
   });
 
   it('should render project details once resolved', () => {
-    component.id = 1;
+    fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
     const text = fixture.debugElement.nativeElement.textContent;
@@ -79,7 +81,7 @@ describe('ProjectDetailsComponent', () => {
   });
 
   it('should render a project card for each subproject', () => {
-    component.id = 1;
+    fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
     const cards = fixture.debugElement.nativeElement.querySelectorAll('app-project-card');
@@ -88,7 +90,7 @@ describe('ProjectDetailsComponent', () => {
 
   it('should render no subproject cards when subProjectIds is empty', () => {
     mockProjectService.getProject.and.returnValue(of({ ...mockProject, subProjectIds: [] }));
-    component.id = 1;
+    fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
     const cards = fixture.debugElement.nativeElement.querySelectorAll('app-project-card');

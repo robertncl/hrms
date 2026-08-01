@@ -79,6 +79,7 @@ describe('CandidatesListComponent', () => {
     component.searchControl.setValue('John');
     tick(500);
     fixture.detectChanges();
+    fixture.detectChanges();
 
     expect(mockCandidateService.getCandidatesByName).toHaveBeenCalledWith('John');
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
