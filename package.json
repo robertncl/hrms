@@ -36,5 +36,10 @@
     "karma-jasmine-html-reporter": "2.2.0",
     "puppeteer": "25.5.0",
     "typescript": "6.0.3"
+  },
+  "overrides": {
+    "puppeteer-core": {
+      "ws": "8.21.2"
+    }
   }
 }
