@@ -40,6 +40,7 @@
   "overrides": {
     "puppeteer-core": {
       "ws": "8.21.2"
-    }
+    },
+    "@hono/node-server": "2.1.0"
   }
 }
