@@ -10,11 +10,6 @@ updates:
       # `npm ci` fail on peer resolution. Revisit when Angular supports 7.x.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-      # zone.js's jasmine-patch breaks under jasmine-core 7 ("Cannot assign to
-      # read only property 'describe'"). Revisit when zone.js supports 7.x.
-      # See: https://github.com/robertncl/hrms/issues/73
-      - dependency-name: "jasmine-core"
-        update-types: ["version-update:semver-major"]
     groups:
       angular:
         patterns:
