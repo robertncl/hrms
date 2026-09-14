@@ -21,8 +21,24 @@ updates:
           - "@angular/*"
       dev-dependencies:
         dependency-type: "development"
+        # Without this, @angular/compiler-cli is pulled out of the angular group
+        # above and bumped in a separate PR (see #85), which recreates the exact
+        # peer-dependency skew the angular group exists to prevent.
+        exclude-patterns:
+          - "@angular/*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # codeql-action/init writes a config file stamped with its own version and
+      # codeql-action/analyze refuses to read a config from a different version
+      # ("Loaded a configuration file for version X, but running version Y").
+      # init, analyze and upload-sarif must always bump together.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+      github-actions:
+        patterns:
+          - "*"
