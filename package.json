@@ -46,5 +46,17 @@
     "electron-to-chromium": "1.5.404",
     "fast-uri": "3.1.6",
     "hono": "4.13.7"
-  }
+  },
+  "@angular/animations": "^22.1.7",
+  "@angular/common": "^22.1.7",
+  "@angular/compiler": "^22.1.7",
+  "@angular/core": "^22.1.7",
+  "@angular/forms": "^22.1.7",
+  "@angular/platform-browser": "^22.1.7",
+  "@angular/platform-browser-dynamic": "^22.1.7",
+  "@angular/router": "^22.1.7",
+  "@angular/build": "^22.1.8",
+  "@angular/cli": "^22.1.8",
+  "@angular/compiler-cli": "^22.1.7",
+  "puppeteer": "^25.11.0"
 }
