@@ -5,6 +5,6 @@ import { candidateDetailsResolver } from 'src/app/shared/resolvers/candidate-det
 
 export const routes: Routes = [
     { path: '', redirectTo: 'candidates', pathMatch: 'full' },
-    { path: 'candidates', pathMatch: 'full', component: CandidatesListComponent },
-    { path: 'candidates/:id', component: CandidateDetailsComponent, resolve: { candidate: candidateDetailsResolver } },
+    { path: 'candidates', pathMatch: 'full', component: CandidatesListComponent, title: 'Recruitment' },
+    { path: 'candidates/:id', component: CandidateDetailsComponent, title: 'Candidate', resolve: { candidate: candidateDetailsResolver } },
 ];

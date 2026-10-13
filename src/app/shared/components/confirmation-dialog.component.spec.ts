@@ -49,4 +49,27 @@ describe('ConfirmationDialogComponent', () => {
 
     expect(component.isConfirmationOpen).toBeFalse();
   });
+
+  it('should call onConfirm and onClose when confirmed', () => {
+    const onConfirm = jasmine.createSpy('onConfirm');
+    component.onConfirm = onConfirm;
+
+    fixture.debugElement.queryAll(By.css('button'))[1].nativeElement.click();
+
+    expect(onConfirm).toHaveBeenCalled();
+  });
+
+  it('should not call onConfirm when cancelled', () => {
+    const onConfirm = jasmine.createSpy('onConfirm');
+    component.onConfirm = onConfirm;
+
+    fixture.debugElement.queryAll(By.css('button'))[0].nativeElement.click();
+
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('should open as a modal so the page behind is inert', () => {
+    const dialog: HTMLDialogElement = fixture.debugElement.query(By.css('dialog')).nativeElement;
+    expect(dialog.matches(':modal')).toBeTrue();
+  });
 });

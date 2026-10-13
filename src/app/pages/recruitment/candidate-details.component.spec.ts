@@ -1,5 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SimpleChange } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
+import { CandidateService } from 'src/app/services/candidate.service';
+import { EmployeeService } from 'src/app/services/employee.service';
 import { CandidateDetailsComponent } from './candidate-details.component';
 import { Candidate } from 'src/app/infrastructure/types/candidate';
 import { CvEvaluationComponent } from './components/cv-evaluation.component';
@@ -28,6 +32,16 @@ describe('CandidateDetailsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [CandidateDetailsComponent],
+      providers: [
+        provideRouter([]),
+        { provide: EmployeeService, useValue: { getEmployees: () => of([]) } },
+        {
+          provide: CandidateService,
+          useValue: {
+            updateCandidate: (id: number, changes: Partial<Candidate>) => of({ ...buildCandidate({ id }), ...changes }),
+          },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(CandidateDetailsComponent);
@@ -106,5 +120,32 @@ describe('CandidateDetailsComponent', () => {
     const rejectionEl = fixture.nativeElement.querySelector('app-rejection-letter');
     expect(rejectionEl).toBeTruthy();
     expect(rejectionEl.textContent).toContain('Rejection letter');
+  });
+
+  it('should move on to the next stage after a stage component saves a change', () => {
+    setCandidate(buildCandidate({ status: 'CV evaluation' }));
+
+    component.workflow.update({ status: 'Interview preparation' }).subscribe();
+    fixture.detectChanges();
+
+    expect(component.candidate.status).toBe('Interview preparation');
+    expect(component.actionsSection).toBe(InterviewPreparationComponent);
+  });
+
+  it('should mark the current step in the progress list', () => {
+    setCandidate(buildCandidate({ status: 'Interview Feedback' }));
+    const current = fixture.nativeElement.querySelector('.stepper [aria-current="step"]');
+    expect(current.textContent).toContain('Feedback');
+  });
+
+  it('should render the next stage on its own after an update', async () => {
+    setCandidate(buildCandidate({ status: 'CV evaluation' }));
+    fixture.autoDetectChanges();
+
+    component.workflow.update({ status: 'Rejected' }).subscribe();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('app-rejection-letter')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.alert-error').textContent).toContain('rejected');
   });
 });

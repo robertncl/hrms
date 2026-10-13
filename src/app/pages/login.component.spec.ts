@@ -1,14 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
+import { Router, provideRouter } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { LoginComponent } from './login.component';
 import { AuthService } from '../services/auth.service';
 
 describe('LoginComponent', () => {
   let component: LoginComponent;
   let fixture: ComponentFixture<LoginComponent>;
+  let navigateSpy: jasmine.Spy;
 
   const mockAuthService = {
+    isAuth$: new BehaviorSubject(false),
     login: jasmine.createSpy('login').and.returnValue(of({ token: 'abc' })),
   };
 
@@ -18,12 +22,14 @@ describe('LoginComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [LoginComponent, NoopAnimationsModule],
+      providers: [provideRouter([])],
     })
       .overrideComponent(LoginComponent, {
         set: { providers: [{ provide: AuthService, useValue: mockAuthService }] },
       })
       .compileComponents();
 
+    navigateSpy = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
     fixture = TestBed.createComponent(LoginComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -74,5 +80,34 @@ describe('LoginComponent', () => {
 
     expect(component.credentials.email).toBe('typed@example.com');
     expect(component.credentials.password).toBe('typedPassword');
+  });
+
+  it('should go to the dashboard after signing in', () => {
+    component.credentials = { email: 'user@example.com', password: 'secret' };
+    component.submit();
+    expect(navigateSpy).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('should show the error message when signing in fails', () => {
+    mockAuthService.login.and.returnValue(throwError(() => new HttpErrorResponse({
+      status: 401, error: { message: 'Invalid email or password' },
+    })));
+    component.credentials = { email: 'user@example.com', password: 'wrong' };
+    component.submit();
+    fixture.detectChanges();
+
+    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Invalid email or password');
+  });
+
+  it('should fill in a demo account', () => {
+    component.useAccount('admin@hrms.demo');
+    expect(component.credentials).toEqual({ email: 'admin@hrms.demo', password: 'demo' });
+  });
+
+  it('should submit when the Login button is clicked', () => {
+    spyOn(component, 'submit');
+    (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    expect(component.submit).toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@ export class TimeOffManagementService {
   deleteRequest$ = new Subject<TimeOffRequest>();
   approveRequest$ = new Subject<TimeOffRequest>();
   rejectRequest$ = new Subject<TimeOffRequest>();
+  createRequest$ = new Subject<Omit<TimeOffRequest, 'id' | 'status'>>();
   selectedType = signal<
     | 'Vacation'
     | 'Sick Leave'
@@ -31,13 +32,24 @@ export class TimeOffManagementService {
       ),
       this.rejectRequest$.pipe(
         switchMap((r) => this.timeOffRequestService.rejectRequest(r.id))
+      ),
+      this.createRequest$.pipe(
+        switchMap((r) => this.timeOffRequestService.createRequest(r))
       )
     ).pipe(
       switchMap(() => {
         return this.timeOffRequestService.getRequestsByType(
           this.selectedType()
         );
-      })
+      }),
+      // Pending requests first, then by start date.
+      map((requests) =>
+        [...requests].sort(
+          (a, b) =>
+            Number(b.status === 'Pending') - Number(a.status === 'Pending') ||
+            a.startDate.localeCompare(b.startDate)
+        )
+      )
     ),
     {
       initialValue: [] as TimeOffRequest[],
@@ -45,6 +57,9 @@ export class TimeOffManagementService {
   );
   resolvedRequests = computed(() =>
     this.requests().filter((r) => r.status !== 'Pending')
+  );
+  pendingRequests = computed(() =>
+    this.requests().filter((r) => r.status === 'Pending')
   );
 
   constructor() {
@@ -63,5 +78,9 @@ export class TimeOffManagementService {
 
   deleteRequest(request: TimeOffRequest) {
     this.deleteRequest$.next(request);
+  }
+
+  createRequest(request: Omit<TimeOffRequest, 'id' | 'status'>) {
+    this.createRequest$.next(request);
   }
 }

@@ -88,12 +88,25 @@ describe('NotificationService', () => {
     expect(service.unreadNotifications()).toEqual([{ ...mockNotification, id: 2, read: false }]);
   });
 
-  it('should replace notifications when the socket emits', () => {
+  it('should add notifications when the socket emits', () => {
     TestBed.runInInjectionContext(() => service.connect());
 
     notifications$.next([mockNotification]);
 
     expect(service.notifications()).toEqual([mockNotification]);
+  });
+
+  it('should keep the read state of notifications the socket sends again', () => {
+    TestBed.runInInjectionContext(() => service.connect());
+    notifications$.next([mockNotification]);
+    service.markAsRead(mockNotification);
+
+    notifications$.next([mockNotification, { ...mockNotification, id: 2 }]);
+
+    expect(service.notifications()).toEqual([
+      { ...mockNotification, read: true },
+      { ...mockNotification, id: 2 },
+    ]);
   });
 
   it('should persist notifications to localStorage via the effect', () => {

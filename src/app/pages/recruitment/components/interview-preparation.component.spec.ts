@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { InterviewPreparationComponent } from './interview-preparation.component';
+import { provideStageTesting } from 'src/testing/candidate-workflow.mock';
 
 describe('InterviewPreparationComponent', () => {
   let component: InterviewPreparationComponent;
@@ -8,6 +9,7 @@ describe('InterviewPreparationComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [InterviewPreparationComponent],
+      providers: provideStageTesting(),
     }).compileComponents();
 
     fixture = TestBed.createComponent(InterviewPreparationComponent);

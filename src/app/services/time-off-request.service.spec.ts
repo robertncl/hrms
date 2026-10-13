@@ -98,4 +98,14 @@ describe('TimeOffRequestService', () => {
     expect(req.request.method).toBe('DELETE');
     req.flush({});
   });
+
+  it('should create a request', () => {
+    const request = { employeeId: 1, startDate: '2026-03-01', endDate: '2026-03-02', type: 'Vacation' as const };
+    service.createRequest(request).subscribe();
+
+    const req = httpMock.expectOne('/time-off-requests');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual(request);
+    req.flush({ ...request, id: 3, status: 'Pending' });
+  });
 });

@@ -34,11 +34,13 @@ describe('TimeOffManagementService', () => {
       'approveRequest',
       'rejectRequest',
       'deleteRequest',
+      'createRequest',
     ]);
     mockTimeOffRequestService.getRequestsByType.and.returnValue(of(mockRequests));
     mockTimeOffRequestService.approveRequest.and.returnValue(of({}));
     mockTimeOffRequestService.rejectRequest.and.returnValue(of({}));
     mockTimeOffRequestService.deleteRequest.and.returnValue(of({}));
+    mockTimeOffRequestService.createRequest.and.returnValue(of(mockRequests[0]));
 
     TestBed.configureTestingModule({
       providers: [{ provide: TimeOffRequestService, useValue: mockTimeOffRequestService }],
@@ -114,5 +116,30 @@ describe('TimeOffManagementService', () => {
     TestBed.tick();
 
     expect(localStorage.getItem('selectedType')).toBe('Sick Leave');
+  });
+
+  it('should create a request and refresh the request list', () => {
+    TestBed.tick();
+    mockTimeOffRequestService.getRequestsByType.calls.reset();
+    const request = { employeeId: 3, startDate: '2026-03-01', endDate: '2026-03-02', type: 'Other' as const };
+
+    service.createRequest(request);
+
+    expect(mockTimeOffRequestService.createRequest).toHaveBeenCalledWith(request);
+    expect(mockTimeOffRequestService.getRequestsByType).toHaveBeenCalled();
+  });
+
+  it('should list pending requests first, then by start date', () => {
+    mockTimeOffRequestService.getRequestsByType.and.returnValue(of([
+      { ...mockRequests[1], id: 5, startDate: '2026-01-10' },
+      { ...mockRequests[0], id: 6, startDate: '2026-03-01' },
+      { ...mockRequests[1], id: 7, startDate: '2026-01-01' },
+      { ...mockRequests[0], id: 8, startDate: '2026-02-01' },
+    ]));
+    const sortedService = TestBed.runInInjectionContext(() => new TimeOffManagementService());
+    TestBed.tick();
+
+    expect(sortedService.requests().map((r) => r.id)).toEqual([8, 6, 7, 5]);
+    expect(sortedService.pendingRequests().map((r) => r.id)).toEqual([8, 6]);
   });
 });

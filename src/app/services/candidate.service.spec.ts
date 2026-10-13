@@ -67,4 +67,13 @@ describe('CandidateService', () => {
     expect(req.request.method).toBe('GET');
     req.flush(mockCandidates[0]);
   });
+
+  it('should update a candidate', () => {
+    service.updateCandidate(1, { status: 'Rejected' }).subscribe();
+
+    const req = httpMock.expectOne('/candidates/1');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ status: 'Rejected' });
+    req.flush(mockCandidates[0]);
+  });
 });

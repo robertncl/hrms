@@ -20,6 +20,10 @@ export class PermissionsService {
         this.permissions$.next({...this.permissions$.getValue(), ...permissions});
     }
 
+    clearPermissions() {
+        this.permissions$.next({});
+    }
+
     revokePermission(permission: Permissions) {
         this.permissions$.next({...this.permissions$.getValue(), [permission]: false});
     }

@@ -11,3 +11,13 @@ export const authGuard: CanActivateFn = () => {
         map((isAuth) => isAuth || router.createUrlTree(['/login'])),
     );
 }
+
+/** Keeps signed-in users away from the login and registration pages. */
+export const guestGuard: CanActivateFn = () => {
+    const router = inject(Router);
+    const authService = inject(AuthService);
+
+    return authService.isAuth$.pipe(
+        map((isAuth) => !isAuth || router.createUrlTree(['/dashboard'])),
+    );
+}

@@ -1,16 +1,28 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { RegistrationComponent } from './registration.component';
+import { Router, provideRouter } from '@angular/router';
+import { BehaviorSubject, of } from 'rxjs';
+import { AuthService } from '../services/auth.service';
 
 describe('RegistrationComponent', () => {
   let component: RegistrationComponent;
   let fixture: ComponentFixture<RegistrationComponent>;
+  let mockAuthService: { isAuth$: BehaviorSubject<boolean>; register: jasmine.Spy; login: jasmine.Spy };
+  let navigateSpy: jasmine.Spy;
 
   beforeEach(async () => {
+    mockAuthService = {
+      isAuth$: new BehaviorSubject(false),
+      register: jasmine.createSpy('register').and.returnValue(of({})),
+      login: jasmine.createSpy('login').and.returnValue(of({ token: 'abc' })),
+    };
     await TestBed.configureTestingModule({
       imports: [RegistrationComponent, NoopAnimationsModule],
+      providers: [provideRouter([]), { provide: AuthService, useValue: mockAuthService }],
     }).compileComponents();
 
+    navigateSpy = spyOn(TestBed.inject(Router), 'navigateByUrl').and.resolveTo(true);
     fixture = TestBed.createComponent(RegistrationComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -71,5 +83,20 @@ describe('RegistrationComponent', () => {
     expect(component.credentials.email).toBe('typed@example.com');
     expect(component.credentials.password).toBe('typedPassword');
     expect(component.credentials.confirmPassword).toBe('typedPassword');
+  });
+
+  it('should register, sign in and go to the dashboard', () => {
+    component.credentials = { email: 'a@b.com', password: 'secret', confirmPassword: 'secret' };
+    component.submit();
+
+    expect(mockAuthService.register).toHaveBeenCalledWith({ email: 'a@b.com', password: 'secret' });
+    expect(mockAuthService.login).toHaveBeenCalledWith({ email: 'a@b.com', password: 'secret' });
+    expect(navigateSpy).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('should not register when the passwords differ', () => {
+    component.credentials = { email: 'a@b.com', password: 'secret', confirmPassword: 'other' };
+    component.submit();
+    expect(mockAuthService.register).not.toHaveBeenCalled();
   });
 });

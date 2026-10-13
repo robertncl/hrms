@@ -66,4 +66,21 @@ describe('EmployeeService', () => {
     expect(req.request.body).toEqual(newEmployee);
     req.flush(mockEmployee);
   });
+
+  it('should update an employee', () => {
+    service.updateEmployee(1, { level: 'Lead' }).subscribe();
+
+    const req = httpMock.expectOne('/employees/1');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ level: 'Lead' });
+    req.flush(mockEmployee);
+  });
+
+  it('should delete an employee', () => {
+    service.deleteEmployee(1).subscribe();
+
+    const req = httpMock.expectOne('/employees/1');
+    expect(req.request.method).toBe('DELETE');
+    req.flush({});
+  });
 });

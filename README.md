@@ -4,6 +4,29 @@ This project uses [Angular CLI](https://github.com/angular/angular-cli) version 
 
 Run `npm install` first. The commands below use the project's local Angular CLI through `npm run` or `npx ng`. A bare `ng` may resolve to a different program: on Debian/Ubuntu, `/usr/bin/ng` is the `ng-common` text editor.
 
+## Demo
+
+HRMS runs as a self-contained demo: an in-browser mock API (`src/app/demo/`) serves seed data for 18 employees, 6 projects, 10 candidates and a set of time off requests, so no backend is needed. Start the dev server and sign in with either account (password `demo`):
+
+| Account | Role | Can edit names and emails |
+| --- | --- | --- |
+| `admin@hrms.demo` | HR Administrator | Yes |
+| `lead@hrms.demo` | Team Lead | No (view only) |
+
+You can also create your own account on the registration page.
+
+What you can do:
+
+- **Dashboard**: headcount, who's away, pending time off (approve or reject in place), headcount by position and the hiring pipeline.
+- **Employees**: search and filter, add, edit and delete people, and see their projects.
+- **Projects**: browse projects, their teams and subprojects.
+- **Time off**: file, approve, reject and delete requests. Approving leave that covers today marks the person as on leave.
+- **Recruitment**: move candidates from CV screening through interview, offer and onboarding, ending with an employee record.
+
+Changes are saved to `localStorage`, so they survive a reload. The refresh button in the header restores the original data. Dates in the seed data are relative to today, so the demo always looks current.
+
+To point the app at a real API instead, set `demo: false` and `apiUrl` in `src/environments/environment*.ts`. The mock API follows the same json-server style routes the services already call (`/employees`, `/employees/:id`, `?firstName_like=`) plus `/api/auth/login`, `/api/auth/logout` and `/api/auth/register`.
+
 ## Development server
 
 Run `npm start` (or `npx ng serve`) for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.

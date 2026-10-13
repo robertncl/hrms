@@ -24,6 +24,10 @@ export class TimeOffRequestService {
     );
   }
 
+  createRequest(request: Omit<TimeOffRequest, 'id' | 'status'>) {
+    return this.http.post<TimeOffRequest>('/time-off-requests', request);
+  }
+
   rejectRequest(id: number) {
     return this.http.patch(`/time-off-requests/${id}`, { status: 'Rejected' });
   }

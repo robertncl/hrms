@@ -1,5 +1,7 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { Notification } from '../infrastructure/types/notification';
 import { SocketService } from './socket.service';
+import { demoNotificationBacklog } from '../demo/demo-notifications';
 
 describe('SocketService', () => {
   let service: SocketService;
@@ -13,28 +15,27 @@ describe('SocketService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should not emit before the interval elapses', fakeAsync(() => {
-    const emissions: unknown[] = [];
+  it('should emit the demo backlog as soon as it is subscribed', fakeAsync(() => {
+    const emissions: Notification[][] = [];
     const subscription = service.notifications$.subscribe((value) => emissions.push(value));
 
-    tick(2_499);
-    expect(emissions.length).toBe(0);
+    expect(emissions.length).toBe(1);
+    expect(emissions[0].map((n) => n.id)).toEqual(demoNotificationBacklog().map((n) => n.id));
 
     subscription.unsubscribe();
-    tick(1);
   }));
 
-  it('should emit an empty array every 2500ms', fakeAsync(() => {
-    const emissions: unknown[] = [];
+  it('should push one new unread notification every minute', fakeAsync(() => {
+    const emissions: Notification[][] = [];
     const subscription = service.notifications$.subscribe((value) => emissions.push(value));
 
-    tick(2_500);
+    tick(59_999);
     expect(emissions.length).toBe(1);
-    expect(emissions[0]).toEqual([]);
 
-    tick(2_500);
+    tick(1);
     expect(emissions.length).toBe(2);
-    expect(emissions[1]).toEqual([]);
+    expect(emissions[1].length).toBe(1);
+    expect(emissions[1][0].read).toBeFalse();
 
     subscription.unsubscribe();
   }));
