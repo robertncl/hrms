@@ -7,6 +7,7 @@ import { ProjectDetailsComponent } from './project-details.component';
 import { ProjectService } from 'src/app/services/project.service';
 import { Project } from 'src/app/infrastructure/types/project';
 import { imageLoader } from 'src/app/app.config';
+import { EmployeeService } from 'src/app/services/employee.service';
 
 describe('ProjectDetailsComponent', () => {
   let component: ProjectDetailsComponent;
@@ -34,6 +35,15 @@ describe('ProjectDetailsComponent', () => {
       imports: [ProjectDetailsComponent, NoopAnimationsModule],
       providers: [
         provideRouter([]),
+        {
+          provide: EmployeeService,
+          useValue: {
+            getEmployees: () => of([
+              { id: 1, firstName: 'Ada', lastName: 'Lovelace', email: '', position: 'Developer', level: 'Lead', isAvailable: true, profilePicture: '' },
+              { id: 9, firstName: 'Not', lastName: 'Member', email: '', position: 'QA', level: 'Junior', isAvailable: true, profilePicture: '' },
+            ]),
+          },
+        },
         { provide: ProjectService, useValue: mockProjectService },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],
@@ -77,7 +87,17 @@ describe('ProjectDetailsComponent', () => {
     const text = fixture.debugElement.nativeElement.textContent;
     expect(text).toContain('Project One');
     expect(text).toContain('First project');
-    expect(text).toContain('one.png');
+    const image: HTMLImageElement = fixture.debugElement.nativeElement.querySelector('.hero img');
+    expect(image.getAttribute('src')).toBe('one.png');
+  });
+
+  it('should list only the employees on the project team', () => {
+    fixture.componentRef.setInput('id', 1);
+    fixture.detectChanges();
+
+    const members = fixture.debugElement.nativeElement.querySelectorAll('.team li');
+    expect(members.length).toBe(1);
+    expect(members[0].textContent).toContain('Ada Lovelace');
   });
 
   it('should render a project card for each subproject', () => {

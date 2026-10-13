@@ -6,16 +6,19 @@ import { CreateEmployeeComponent } from './create-employee.component';
 import { employeeDetailsResolver } from 'src/app/shared/resolvers/employee-details.resolver';
 
 export const routes: Routes = [
-    { path: 'list', component: EmployeeListComponent },
+    { path: '', redirectTo: 'list', pathMatch: 'full' },
+    { path: 'list', component: EmployeeListComponent, title: 'Employees' },
     {
         path: 'details/:id',
         component: EmployeeDetailsComponent,
+        title: 'Employee',
         resolve: { employee: employeeDetailsResolver },
     },
-    { path: 'create', component: CreateEmployeeComponent },
+    { path: 'create', component: CreateEmployeeComponent, title: 'Add employee' },
     {
         path: 'edit/:id',
         component: EditEmployeeComponent,
+        title: 'Edit employee',
         resolve: { employee: employeeDetailsResolver },
     },
 ];

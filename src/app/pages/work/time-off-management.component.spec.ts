@@ -4,6 +4,9 @@ import { signal } from '@angular/core';
 import { TimeOffManagementComponent } from './time-off-management.component';
 import { TimeOffManagementService } from 'src/app/services/time-off-management.service';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
+import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
+import { EmployeeService } from 'src/app/services/employee.service';
 
 describe('TimeOffManagementComponent', () => {
   let component: TimeOffManagementComponent;
@@ -39,6 +42,7 @@ describe('TimeOffManagementComponent', () => {
     approveRequest: jasmine.Spy;
     rejectRequest: jasmine.Spy;
     deleteRequest: jasmine.Spy;
+    createRequest: jasmine.Spy;
   };
 
   beforeEach(async () => {
@@ -51,11 +55,21 @@ describe('TimeOffManagementComponent', () => {
       approveRequest: jasmine.createSpy('approveRequest'),
       rejectRequest: jasmine.createSpy('rejectRequest'),
       deleteRequest: jasmine.createSpy('deleteRequest'),
+      createRequest: jasmine.createSpy('createRequest'),
     };
 
     await TestBed.configureTestingModule({
       imports: [TimeOffManagementComponent, NoopAnimationsModule],
       providers: [
+        provideRouter([]),
+        {
+          provide: EmployeeService,
+          useValue: {
+            getEmployees: () => of([
+              { id: 10, firstName: 'Ada', lastName: 'Lovelace', email: '', position: 'Developer', level: 'Lead', isAvailable: true, profilePicture: '' },
+            ]),
+          },
+        },
         { provide: TimeOffManagementService, useValue: mockTimeOffsService },
       ],
     }).compileComponents();
@@ -69,9 +83,17 @@ describe('TimeOffManagementComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display resolved and total counts', () => {
+  it('should display the count of requests per status', () => {
     const text = fixture.debugElement.nativeElement.textContent;
-    expect(text).toContain('Resolved 1 / 2 Unresolved');
+    expect(text).toContain('1 pending');
+    expect(text).toContain('1 approved');
+    expect(text).toContain('0 rejected');
+  });
+
+  it('should show employee names, falling back to the id when unknown', () => {
+    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
+    expect(rows[0].textContent).toContain('Ada Lovelace');
+    expect(rows[1].textContent).toContain('Employee #11');
   });
 
   it('should render a table row for each request', () => {
@@ -135,5 +157,30 @@ describe('TimeOffManagementComponent', () => {
     fixture.detectChanges();
 
     expect(selectedTypeSignal()).toBe('Vacation');
+  });
+
+  it('should submit a new request from the dialog', () => {
+    component.openNewRequest();
+    component.newRequestForm.patchValue({ employeeId: 10, type: 'Other', startDate: '2026-03-02', endDate: '2026-03-03', comment: ' Dentist ' });
+    component.submitNewRequest();
+
+    expect(mockTimeOffsService.createRequest).toHaveBeenCalledWith({
+      employeeId: 10, type: 'Other', startDate: '2026-03-02', endDate: '2026-03-03', comment: 'Dentist',
+    });
+  });
+
+  it('should not submit a request that ends before it starts', () => {
+    component.openNewRequest();
+    component.newRequestForm.patchValue({ employeeId: 10, startDate: '2026-03-05', endDate: '2026-03-01' });
+    component.submitNewRequest();
+
+    expect(component.newRequestForm.hasError('endBeforeStart')).toBeTrue();
+    expect(mockTimeOffsService.createRequest).not.toHaveBeenCalled();
+  });
+
+  it('should submit the new request form when its button is clicked', () => {
+    spyOn(component, 'submitNewRequest');
+    (fixture.nativeElement.querySelector('dialog button[type="submit"]') as HTMLButtonElement).click();
+    expect(component.submitNewRequest).toHaveBeenCalled();
   });
 });

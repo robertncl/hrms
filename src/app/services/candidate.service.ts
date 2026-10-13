@@ -19,4 +19,8 @@ export class CandidateService {
   getCandidate(id: number) {
     return this.http.get<Candidate>(`/candidates/${id}`);
   }
+
+  updateCandidate(id: number, changes: Partial<Candidate>) {
+    return this.http.patch<Candidate>(`/candidates/${id}`, changes);
+  }
 }

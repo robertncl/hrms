@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RejectionLetterComponent } from './rejection-letter.component';
+import { provideStageTesting } from 'src/testing/candidate-workflow.mock';
 
 describe('RejectionLetterComponent', () => {
   let component: RejectionLetterComponent;
@@ -8,6 +9,7 @@ describe('RejectionLetterComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [RejectionLetterComponent],
+      providers: provideStageTesting(),
     }).compileComponents();
 
     fixture = TestBed.createComponent(RejectionLetterComponent);

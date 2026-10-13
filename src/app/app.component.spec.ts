@@ -36,10 +36,10 @@ describe('AppComponent', () => {
     expect(app.title).toEqual('hrms');
   });
 
-  it('should render title', () => {
+  it('should render the router outlet that hosts every page', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h2')?.textContent).toContain('HRMS');
+    expect(compiled.querySelector('router-outlet')).toBeTruthy();
   });
 });

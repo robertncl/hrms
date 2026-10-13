@@ -22,8 +22,12 @@ export class NotificationService {
     connect() {
         return this.socketService.notifications$.pipe(
             takeUntilDestroyed(),
-        ).subscribe(notifications => {
-            this.#notifications.set(notifications);
+        ).subscribe(incoming => {
+            // Merge by id so notifications already seen keep their read state.
+            this.#notifications.update(current => {
+                const known = new Set(current.map(n => n.id));
+                return [...current, ...incoming.filter(n => !known.has(n.id))];
+            });
         });
     }
 

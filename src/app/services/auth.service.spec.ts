@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { AuthService } from './auth.service';
+import { PermissionsService } from './permissions.service';
+import { firstValueFrom } from 'rxjs';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -79,5 +81,53 @@ describe('AuthService', () => {
     service.restoreSession();
 
     expect(service.isAuth$.getValue()).toBe(false);
+  });
+
+  it('should keep the user and permissions from the login response', async () => {
+    const permissions = TestBed.inject(PermissionsService);
+    service.login({ email: 'jane@example.com', password: 'secret' }).subscribe();
+    httpMock.expectOne('/api/auth/login').flush({
+      token: 'abc123',
+      user: { name: 'Jane Doe', email: 'jane@example.com', role: 'HR Administrator' },
+      permissions: { DeleteEmployee: true },
+    });
+
+    expect(service.currentUser()?.name).toBe('Jane Doe');
+    expect(await firstValueFrom(permissions.hasPermission('DeleteEmployee'))).toBeTrue();
+  });
+
+  it('should restore the user and permissions with the session', async () => {
+    const permissions = TestBed.inject(PermissionsService);
+    sessionStorage.setItem('token', 'xyz789');
+    sessionStorage.setItem('user', JSON.stringify({ name: 'Jane Doe', email: 'j@e.com', role: 'Team Lead' }));
+    sessionStorage.setItem('permissions', JSON.stringify({ ViewEmployees: true }));
+
+    service.restoreSession();
+
+    expect(service.currentUser()?.role).toBe('Team Lead');
+    expect(await firstValueFrom(permissions.hasPermission('ViewEmployees'))).toBeTrue();
+  });
+
+  it('should clear the user and permissions on logout', async () => {
+    const permissions = TestBed.inject(PermissionsService);
+    sessionStorage.setItem('token', 'abc123');
+    permissions.setPermissions({ ViewEmployees: true });
+    service.currentUser.set({ name: 'Jane Doe', email: 'j@e.com', role: 'Team Lead' });
+
+    service.logout().subscribe();
+    httpMock.expectOne('/api/auth/logout').flush({});
+
+    expect(service.currentUser()).toBeNull();
+    expect(sessionStorage.getItem('permissions')).toBeNull();
+    expect(await firstValueFrom(permissions.hasPermission('ViewEmployees'))).toBeFalse();
+  });
+
+  it('should send a registration request', () => {
+    service.register({ email: 'jane@example.com', password: 'secret' }).subscribe();
+
+    const req = httpMock.expectOne('/api/auth/register');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ email: 'jane@example.com', password: 'secret' });
+    req.flush({});
   });
 });

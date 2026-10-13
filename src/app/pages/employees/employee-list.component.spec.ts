@@ -3,6 +3,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { IMAGE_LOADER } from '@angular/common';
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { ConfirmationDialogComponent } from 'src/app/shared/components/confirmation-dialog.component';
 import { EmployeeListComponent } from './employee-list.component';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { Employee } from 'src/app/infrastructure/types/employee';
@@ -40,6 +41,7 @@ describe('EmployeeListComponent', () => {
     getEmployee: jasmine.createSpy('getEmployee').and.callFake((id: number) =>
       of(mockEmployees.find((employee) => employee.id === id)),
     ),
+    deleteEmployee: jasmine.createSpy('deleteEmployee').and.returnValue(of({})),
   };
 
   beforeEach(async () => {
@@ -84,5 +86,62 @@ describe('EmployeeListComponent', () => {
 
     expect(component.isConfirmationOpen).toBeTrue();
     expect(component.confirmDialog).toBeTruthy();
+  });
+
+  const rowNames = () =>
+    Array.from(fixture.debugElement.nativeElement.querySelectorAll('tbody tr .person a') as NodeListOf<HTMLElement>)
+      .map((a) => a.textContent!.trim());
+
+  it('should filter employees by name or email', () => {
+    component.search.set('smith');
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['Jane Smith']);
+  });
+
+  it('should filter employees by position', () => {
+    component.positionFilter.set('Developer');
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['John Doe']);
+  });
+
+  it('should take the initial position filter from the route', () => {
+    fixture.componentRef.setInput('position', 'Designer');
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['Jane Smith']);
+  });
+
+  it('should show availability as a labelled badge', () => {
+    const badges = Array.from(fixture.debugElement.nativeElement.querySelectorAll('tbody .badge') as NodeListOf<HTMLElement>)
+      .map((b) => b.textContent!.trim());
+    expect(badges).toEqual(['Available', 'On leave']);
+  });
+
+  it('should delete the employee and reload the list once confirmed', async () => {
+    mockEmployeeService.getEmployees.calls.reset();
+    await component.showConfirmationDialog(mockEmployees[0]);
+    expect(component.confirmDialog).toBe(ConfirmationDialogComponent);
+
+    (component.confirmInputs['onConfirm'] as () => void)();
+
+    expect(mockEmployeeService.deleteEmployee).toHaveBeenCalledWith(1);
+    expect(mockEmployeeService.getEmployees).toHaveBeenCalledTimes(1);
+  });
+
+  it('should remove the dialog when it closes', async () => {
+    await component.showConfirmationDialog(mockEmployees[0]);
+    (component.confirmInputs['onClose'] as () => void)();
+
+    expect(component.isConfirmationOpen).toBeFalse();
+    expect(component.confirmDialog).toBeNull();
+  });
+
+  it('should render the confirmation dialog without a manual change detection pass', async () => {
+    fixture.autoDetectChanges();
+    await component.showConfirmationDialog(mockEmployees[0]);
+    await fixture.whenStable();
+
+    const dialog: HTMLDialogElement = fixture.nativeElement.querySelector('app-confirmation-dialog dialog');
+    expect(dialog).toBeTruthy();
+    expect(dialog.textContent).toContain('John Doe will be removed');
   });
 });

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router, UrlTree } from '@angular/router';
 import { Observable, of } from 'rxjs';
 import { AuthService } from 'src/app/services/auth.service';
-import { authGuard } from './auth.guard';
+import { authGuard, guestGuard } from './auth.guard';
 
 describe('authGuard', () => {
   let mockAuthService: { isAuth$: Observable<boolean> };
@@ -47,6 +47,28 @@ describe('authGuard', () => {
       expect(value).toBe(mockUrlTree);
       expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/login']);
       done();
+    });
+  });
+
+  describe('guestGuard', () => {
+    const runGuestGuard = () =>
+      TestBed.runInInjectionContext(() => guestGuard(null as any, null as any));
+
+    it('should allow signed-out users', (done) => {
+      mockAuthService.isAuth$ = of(false);
+      (runGuestGuard() as Observable<boolean>).subscribe((value) => {
+        expect(value).toBeTrue();
+        done();
+      });
+    });
+
+    it('should send signed-in users to the dashboard', (done) => {
+      mockAuthService.isAuth$ = of(true);
+      (runGuestGuard() as Observable<UrlTree>).subscribe((value) => {
+        expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/dashboard']);
+        expect(value).toBe(mockUrlTree);
+        done();
+      });
     });
   });
 });
