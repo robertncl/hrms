@@ -1,11 +1,14 @@
+const enabled = new WeakSet<HTMLDialogElement>();
+
 /**
  * Closes a modal dialog when its backdrop is clicked, for browsers without
- * `<dialog closedby="any">` support (Safari). Call once with the dialog element.
+ * `<dialog closedby="any">` support (Safari). Safe to call more than once.
  */
 export function enableLightDismissFallback(dialog: HTMLDialogElement): void {
-  if ('closedBy' in HTMLDialogElement.prototype) {
+  if ('closedBy' in HTMLDialogElement.prototype || enabled.has(dialog)) {
     return;
   }
+  enabled.add(dialog);
   dialog.addEventListener('click', (event) => {
     if (event.target !== dialog) {
       return;

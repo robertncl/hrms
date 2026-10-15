@@ -178,5 +178,6 @@ export class ShellComponent {
     { label: 'Projects', link: '/work/projects', icon: 'briefcase' },
     { label: 'Time off', link: '/work/time-off', icon: 'calendar' },
     { label: 'Recruitment', link: '/recruitment', icon: 'user-plus' },
+    { label: 'Learning', link: '/learning', icon: 'book' },
   ];
 }

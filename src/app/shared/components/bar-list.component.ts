@@ -12,7 +12,7 @@ export type BarListItem = { label: string; value: number; link?: string | unknow
   template: `
     <ul class="bars" [attr.aria-label]="label()">
       @for (item of items(); track item.label) {
-        <li [title]="item.label + ': ' + item.value">
+        <li [title]="item.label + ': ' + item.value + unit()">
           @if (item.link) {
             <a class="label" [routerLink]="item.link" [queryParams]="item.query">{{ item.label }}</a>
           } @else {
@@ -20,7 +20,7 @@ export type BarListItem = { label: string; value: number; link?: string | unknow
           }
           <span class="track">
             <span class="bar" [style.flex-basis.%]="(item.value / max()) * 88"></span>
-            <span class="value">{{ item.value }}</span>
+            <span class="value">{{ item.value }}{{ unit() }}</span>
           </span>
         </li>
       }
@@ -76,5 +76,9 @@ export type BarListItem = { label: string; value: number; link?: string | unknow
 export class BarListComponent {
   items = input.required<BarListItem[]>();
   label = input('');
-  max = computed(() => Math.max(1, ...this.items().map((item) => item.value)));
+  /** Appended to each value label, e.g. '%'. */
+  unit = input('');
+  /** Fixed top of the scale (e.g. 100 for percentages); defaults to the largest value. */
+  scaleMax = input<number | undefined>(undefined);
+  max = computed(() => this.scaleMax() ?? Math.max(1, ...this.items().map((item) => item.value)));
 }

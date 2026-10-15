@@ -9,7 +9,8 @@ import {
 import { Injectable, inject } from '@angular/core';
 import { Observable, mergeMap, of, throwError, timer } from 'rxjs';
 import { Employee } from '../infrastructure/types/employee';
-import { DemoDatabase, createDemoDatabase, daysFromToday } from './demo-data';
+import { Enrollment } from '../infrastructure/types/course';
+import { DemoDatabase, StoredEnrollment, createDemoDatabase, daysFromToday } from './demo-data';
 
 const STORAGE_KEY = 'hrms-demo-db';
 
@@ -17,7 +18,10 @@ type Collection = Exclude<keyof DemoDatabase, 'users'>;
 type Row = { id: number } & Record<string, unknown>;
 type Result = { status: number; body: unknown };
 
-const COLLECTIONS: Collection[] = ['employees', 'projects', 'candidates', 'time-off-requests'];
+const COLLECTIONS: Collection[] = ['employees', 'projects', 'candidates', 'time-off-requests', 'courses', 'enrollments'];
+
+/** New hires get every mandatory course, due this many days after they start. */
+const MANDATORY_COURSE_DUE_DAYS = 30;
 
 const ok = (body: unknown, status = 200): Result => ({ status, body });
 const fail = (status: number, message: string): Result => ({ status, body: { message } });
@@ -121,13 +125,20 @@ export class DemoBackend {
                 case 'GET':
                     return ok(rows.filter(row => matches(row, query)).map(row => this.view(collection, row)));
                 case 'POST': {
+                    const rejection = this.validateCreate(collection, body);
+                    if (rejection) {
+                        return rejection;
+                    }
                     const created = {
                         ...defaultsFor(collection),
                         ...body,
-                        id: rows.reduce((max, row) => Math.max(max, row.id), 0) + 1,
+                        id: nextId(rows),
                     } as Row;
-                    rows.push(created);
-                    return ok(this.view(collection, created), 201);
+                    rows.push(this.normalize(collection, created));
+                    if (collection === 'employees') {
+                        this.enrollInMandatoryCourses(created.id);
+                    }
+                    return ok(this.view(collection, rows[rows.length - 1]), 201);
                 }
                 default:
                     return fail(405, 'Method not allowed');
@@ -142,15 +153,18 @@ export class DemoBackend {
             case 'GET':
                 return ok(this.view(collection, rows[index]));
             case 'PATCH':
-                rows[index] = { ...rows[index], ...body, id: rows[index].id };
+                rows[index] = this.normalize(collection, { ...rows[index], ...body, id: rows[index].id });
                 return ok(this.view(collection, rows[index]));
             case 'PUT':
-                rows[index] = { ...body, id: rows[index].id } as Row;
+                rows[index] = this.normalize(collection, { ...body, id: rows[index].id } as Row);
                 return ok(this.view(collection, rows[index]));
             case 'DELETE':
                 rows.splice(index, 1);
                 if (collection === 'employees') {
                     this.removeEmployeeReferences(id!);
+                }
+                if (collection === 'courses') {
+                    this.db.enrollments = this.db.enrollments.filter(e => e.courseId !== id);
                 }
                 return ok({});
             default:
@@ -169,10 +183,67 @@ export class DemoBackend {
                 r => r.employeeId === row.id && r.status === 'Approved' && r.startDate <= today && today <= r.endDate,
             );
         }
+        if (collection === 'enrollments') {
+            const enrollment = copy as unknown as Enrollment;
+            const total = this.moduleCount(enrollment.courseId);
+            enrollment.progress = total ? Math.round((enrollment.completedModules / total) * 100) : 0;
+            enrollment.status = enrollment.completedModules === 0
+                ? 'Not started'
+                : enrollment.completedModules >= total ? 'Completed' : 'In progress';
+        }
         return copy;
     }
 
+    private validateCreate(collection: Collection, body: Record<string, unknown>): Result | null {
+        if (collection === 'enrollments') {
+            if (!this.db.courses.some(c => c.id === body['courseId'])) {
+                return fail(400, 'Unknown course');
+            }
+            if (this.db.enrollments.some(e => e.courseId === body['courseId'] && e.employeeId === body['employeeId'])) {
+                return fail(409, 'This employee is already enrolled in the course');
+            }
+        }
+        return null;
+    }
+
+    /** Keeps stored rows consistent: enrollment progress stays in range and completion is dated. */
+    private normalize(collection: Collection, row: Row): Row {
+        if (collection !== 'enrollments') {
+            return row;
+        }
+        const enrollment = row as unknown as StoredEnrollment & Row;
+        const total = this.moduleCount(enrollment.courseId);
+        enrollment.completedModules = Math.min(Math.max(Math.round(Number(enrollment.completedModules) || 0), 0), total);
+        // Derived fields are never stored.
+        delete (enrollment as Partial<Enrollment>).status;
+        delete (enrollment as Partial<Enrollment>).progress;
+        if (enrollment.completedModules >= total) {
+            enrollment.completedAt ??= daysFromToday(0);
+        } else {
+            delete enrollment.completedAt;
+        }
+        return enrollment;
+    }
+
+    private moduleCount(courseId: number): number {
+        return this.db.courses.find(c => c.id === courseId)?.modules.length ?? 0;
+    }
+
+    private enrollInMandatoryCourses(employeeId: number) {
+        for (const course of this.db.courses.filter(c => c.mandatory)) {
+            this.db.enrollments.push({
+                id: nextId(this.db.enrollments),
+                courseId: course.id,
+                employeeId,
+                assignedAt: daysFromToday(0),
+                dueDate: daysFromToday(MANDATORY_COURSE_DUE_DAYS),
+                completedModules: 0,
+            });
+        }
+    }
+
     private removeEmployeeReferences(employeeId: number) {
+        this.db.enrollments = this.db.enrollments.filter(e => e.employeeId !== employeeId);
         this.db['time-off-requests'] = this.db['time-off-requests'].filter(r => r.employeeId !== employeeId);
         for (const project of this.db.projects) {
             project.employees = project.employees.filter(id => id !== employeeId);
@@ -181,9 +252,9 @@ export class DemoBackend {
 
     private load(): DemoDatabase {
         try {
-            const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as DemoDatabase | null;
-            if (stored && [...COLLECTIONS, 'users'].every(key => Array.isArray(stored[key as keyof DemoDatabase]))) {
-                return stored;
+            const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Partial<DemoDatabase> | null;
+            if (stored && ['employees', 'projects', 'candidates', 'time-off-requests', 'users'].every(key => Array.isArray(stored[key as keyof DemoDatabase]))) {
+                return migrate(stored);
             }
         } catch {
             // Unreadable or blocked storage: fall back to fresh seed data.
@@ -220,6 +291,22 @@ function matches(row: Row, query: URLSearchParams): boolean {
     return true;
 }
 
+/** Adds collections introduced after the data was first saved, keeping the visitor's changes. */
+function migrate(stored: Partial<DemoDatabase>): DemoDatabase {
+    const seed = createDemoDatabase();
+    const db = { ...seed, ...stored } as DemoDatabase;
+    if (!Array.isArray(stored.courses) || !Array.isArray(stored.enrollments)) {
+        const employeeIds = new Set(db.employees.map(e => e.id));
+        db.courses = seed.courses;
+        db.enrollments = seed.enrollments.filter(e => employeeIds.has(e.employeeId));
+    }
+    return db;
+}
+
+function nextId(rows: { id: number }[]): number {
+    return rows.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+}
+
 function defaultsFor(collection: Collection): Record<string, unknown> {
     switch (collection) {
         case 'employees':
@@ -230,6 +317,10 @@ function defaultsFor(collection: Collection): Record<string, unknown> {
             return { status: 'Pending' };
         case 'projects':
             return { employees: [], subProjectIds: [], image: '' };
+        case 'courses':
+            return { mandatory: false, modules: [], description: '' };
+        case 'enrollments':
+            return { completedModules: 0, assignedAt: daysFromToday(0) };
     }
 }
 

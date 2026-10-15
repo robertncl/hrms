@@ -6,6 +6,8 @@ import { BehaviorSubject, forkJoin, switchMap } from 'rxjs';
 import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
+import { EnrollmentService } from '../services/enrollment.service';
+import { completionRate, isOverdue } from './learning/learning';
 import { AuthService } from '../services/auth.service';
 import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
@@ -49,6 +51,11 @@ const PIPELINE_STAGES = ['CV evaluation', 'Interview preparation', 'Interview Fe
             <span class="stat-label">Active candidates</span>
             <span class="stat-value">{{ activeCandidates() }}</span>
             <span class="stat-note">In the hiring pipeline</span>
+          </a>
+          <a class="card stat" routerLink="/learning">
+            <span class="stat-label">Overdue training</span>
+            <span class="stat-value">{{ overdueTraining() }}</span>
+            <span class="stat-note">{{ trainingRate() }}% of training complete</span>
           </a>
         </section>
 
@@ -180,6 +187,7 @@ export class DashboardComponent {
   private readonly employeeService = inject(EmployeeService);
   private readonly timeOffRequestService = inject(TimeOffRequestService);
   private readonly candidateService = inject(CandidateService);
+  private readonly enrollmentService = inject(EnrollmentService);
   private readonly user = inject(AuthService).currentUser;
 
   readonly today = new Date();
@@ -193,6 +201,7 @@ export class DashboardComponent {
           employees: this.employeeService.getEmployees(),
           requests: this.timeOffRequestService.getRequests(),
           candidates: this.candidateService.getCandidates(),
+          enrollments: this.enrollmentService.getEnrollments(),
         }),
       ),
     ),
@@ -224,6 +233,9 @@ export class DashboardComponent {
       .filter((r) => r.status === 'Approved' && r.endDate >= from && r.startDate <= to)
       .sort((a, b) => a.startDate.localeCompare(b.startDate));
   });
+
+  overdueTraining = computed(() => (this.data()?.enrollments ?? []).filter((e) => isOverdue(e)).length);
+  trainingRate = computed(() => completionRate(this.data()?.enrollments ?? []));
 
   activeCandidates = computed(
     () => (this.data()?.candidates ?? []).filter((c) => c.status !== 'Rejected' && !c.employeeId).length,
