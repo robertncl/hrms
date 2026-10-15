@@ -3,4 +3,5 @@ export type Permissions =
   | 'EditEmployeeGeneralDetails'
   | 'EditEmployeePrivateDetails'
   | 'DeleteEmployee'
-  | 'CreateEmployee';
+  | 'CreateEmployee'
+  | 'ManageCourses';

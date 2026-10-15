@@ -7,6 +7,8 @@ import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
 import { AuthService } from '../services/auth.service';
+import { EnrollmentService } from '../services/enrollment.service';
+import { Enrollment } from '../infrastructure/types/course';
 import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { Candidate } from '../infrastructure/types/candidate';
@@ -36,6 +38,16 @@ describe('DashboardComponent', () => {
     candidate(5, 'Approved', { offerAccepted: true, employeeId: 9 }),
   ];
 
+  const enrollment = (id: number, status: Enrollment['status'], dueDate?: string): Enrollment => ({
+    id, courseId: 1, employeeId: 1, assignedAt: '', completedModules: 0, status, progress: 0, ...(dueDate ? { dueDate } : {}),
+  });
+  const enrollments = [
+    enrollment(1, 'Completed', daysFromToday(-5)),
+    enrollment(2, 'In progress', daysFromToday(-1)),
+    enrollment(3, 'Not started', daysFromToday(5)),
+    enrollment(4, 'Completed'),
+  ];
+
   const text = () => fixture.nativeElement.textContent as string;
 
   beforeEach(async () => {
@@ -52,6 +64,7 @@ describe('DashboardComponent', () => {
         { provide: EmployeeService, useValue: { getEmployees: () => of(employees) } },
         { provide: TimeOffRequestService, useValue: mockTimeOffRequestService },
         { provide: CandidateService, useValue: { getCandidates: () => of(candidates) } },
+        { provide: EnrollmentService, useValue: { getEnrollments: () => of(enrollments) } },
         { provide: AuthService, useValue: { currentUser: signal({ name: 'Alex Morgan', email: '', role: '' }) } },
       ],
     }).compileComponents();
@@ -74,6 +87,7 @@ describe('DashboardComponent', () => {
       ['Away today', '1'],
       ['Pending requests', '1'],
       ['Active candidates', '3'],
+      ['Overdue training', '1'],
     ]);
   });
 
@@ -102,5 +116,11 @@ describe('DashboardComponent', () => {
 
     expect(mockTimeOffRequestService.approveRequest).toHaveBeenCalledWith(1);
     expect(mockTimeOffRequestService.getRequests).toHaveBeenCalledTimes(1);
+  });
+
+  it('should show the share of training completed', () => {
+    const tile = Array.from(fixture.nativeElement.querySelectorAll('.stat') as NodeListOf<HTMLElement>)
+      .find((stat) => stat.textContent!.includes('Overdue training'))!;
+    expect(tile.querySelector('.stat-note')!.textContent).toContain('50% of training complete');
   });
 });

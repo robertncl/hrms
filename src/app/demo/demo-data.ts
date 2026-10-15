@@ -1,4 +1,5 @@
 import { Candidate } from '../infrastructure/types/candidate';
+import { Course, Enrollment } from '../infrastructure/types/course';
 import { Employee } from '../infrastructure/types/employee';
 import { Permissions } from '../infrastructure/types/permissions';
 import { Project } from '../infrastructure/types/project';
@@ -16,7 +17,12 @@ export type DemoDatabase = {
     projects: Project[];
     candidates: Candidate[];
     'time-off-requests': TimeOffRequest[];
+    courses: Course[];
+    /** Stored without the derived status/progress fields. */
+    enrollments: StoredEnrollment[];
 };
+
+export type StoredEnrollment = Omit<Enrollment, 'status' | 'progress'>;
 
 const ALL_PERMISSIONS: Record<Permissions, boolean> = {
     ViewEmployees: true,
@@ -24,6 +30,7 @@ const ALL_PERMISSIONS: Record<Permissions, boolean> = {
     EditEmployeePrivateDetails: true,
     DeleteEmployee: true,
     CreateEmployee: true,
+    ManageCourses: true,
 };
 
 export const DEMO_PASSWORD = 'demo';
@@ -41,7 +48,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
         email: 'lead@hrms.demo',
         role: 'Team Lead',
         password: DEMO_PASSWORD,
-        permissions: { ...ALL_PERMISSIONS, EditEmployeePrivateDetails: false },
+        permissions: { ...ALL_PERMISSIONS, EditEmployeePrivateDetails: false, ManageCourses: false },
     },
 ];
 
@@ -186,5 +193,135 @@ export function createDemoDatabase(today = new Date()): DemoDatabase {
             { id: 11, employeeId: 7, startDate: day(15), endDate: day(19), type: 'Vacation', status: 'Approved', comment: 'Ski trip' },
             { id: 12, employeeId: 17, startDate: day(40), endDate: day(130), type: 'Maternity Leave', status: 'Pending' },
         ],
+        courses: DEMO_COURSES.map(course => ({ ...course, modules: [...course.modules] })),
+        enrollments: createDemoEnrollments(today),
     };
+}
+
+export const DEMO_COURSES: Course[] = [
+    {
+        id: 1,
+        title: 'Welcome to the Company',
+        category: 'Onboarding',
+        format: 'Self-paced',
+        durationHours: 2,
+        description: 'Everything you need for your first weeks: who we are, how we work and where to find help.',
+        mandatory: true,
+        modules: ['Our mission and values', 'How we work', 'Tools and accounts', 'Benefits overview'],
+    },
+    {
+        id: 2,
+        title: 'Information Security Essentials',
+        category: 'Compliance',
+        format: 'Video',
+        durationHours: 1.5,
+        description: 'Spot phishing, protect your accounts and devices, and know what to do when something looks wrong.',
+        mandatory: true,
+        modules: ['Recognising phishing', 'Passwords and MFA', 'Securing your devices', 'Reporting an incident'],
+    },
+    {
+        id: 3,
+        title: 'Respect at Work',
+        category: 'Compliance',
+        format: 'Video',
+        durationHours: 1,
+        description: 'What a respectful workplace looks like, how to recognise harassment and how to speak up safely.',
+        mandatory: true,
+        modules: ['A respectful workplace', 'Recognising harassment', 'Speaking up'],
+    },
+    {
+        id: 4,
+        title: 'Data Privacy in Practice',
+        category: 'Compliance',
+        format: 'Self-paced',
+        durationHours: 1,
+        description: 'Handle personal data lawfully, answer data subject requests and respond to a breach.',
+        mandatory: false,
+        modules: ['Personal data basics', 'Lawful processing', 'Data subject requests', 'Handling a breach'],
+    },
+    {
+        id: 5,
+        title: 'Modern Angular in Depth',
+        category: 'Technical',
+        format: 'Workshop',
+        durationHours: 12,
+        description: 'Hands-on workshop on signals, change detection, routing, forms and testing in current Angular.',
+        mandatory: false,
+        modules: ['Signals and resources', 'Change detection', 'Routing and lazy loading', 'Reactive forms', 'Testing components'],
+    },
+    {
+        id: 6,
+        title: 'Accessible Design Fundamentals',
+        category: 'Technical',
+        format: 'Self-paced',
+        durationHours: 4,
+        description: 'Design and build interfaces everyone can use, from colour contrast to screen reader support.',
+        mandatory: false,
+        modules: ['WCAG overview', 'Colour and contrast', 'Keyboard and focus', 'Screen readers'],
+    },
+    {
+        id: 7,
+        title: 'Leading High-Performing Teams',
+        category: 'Leadership',
+        format: 'Workshop',
+        durationHours: 8,
+        description: 'Practical leadership: set direction, give feedback that lands, delegate well and grow your people.',
+        mandatory: false,
+        modules: ['Setting direction', 'Feedback that lands', 'Delegation', 'Effective one-to-ones', 'Growing your people'],
+    },
+    {
+        id: 8,
+        title: 'Clear Communication',
+        category: 'Soft skills',
+        format: 'Video',
+        durationHours: 3,
+        description: 'Listen actively, write clearly and present with confidence.',
+        mandatory: false,
+        modules: ['Active listening', 'Writing clearly', 'Presenting with confidence'],
+    },
+];
+
+/** Seed enrollments: everyone has the mandatory courses, plus role-relevant electives. */
+function createDemoEnrollments(today: Date): StoredEnrollment[] {
+    const day = (offset: number) => daysFromToday(offset, today);
+    const moduleCount = new Map(DEMO_COURSES.map(c => [c.id, c.modules.length]));
+    const enrollments: StoredEnrollment[] = [];
+    const enroll = (courseId: number, employeeId: number, completedModules: number, dueOffset?: number) => {
+        const done = completedModules >= moduleCount.get(courseId)!;
+        enrollments.push({
+            id: enrollments.length + 1,
+            courseId,
+            employeeId,
+            assignedAt: day(-60 + employeeId),
+            ...(dueOffset === undefined ? {} : { dueDate: day(dueOffset) }),
+            completedModules,
+            ...(done ? { completedAt: day(-40 + employeeId) } : {}),
+        });
+    };
+
+    // [completed modules, due in days] per employee id, for each mandatory course.
+    const welcome: Record<number, [number, number]> = { 14: [3, -2], 15: [2, 5] };
+    const security: Record<number, [number, number]> = { 3: [2, 10], 6: [0, 10], 9: [1, -4], 12: [3, 10], 15: [0, -1], 18: [2, 10] };
+    const respect: Record<number, [number, number]> = { 11: [1, 21], 12: [0, 21], 14: [0, 21], 15: [1, 21], 16: [0, 21], 17: [2, 21], 18: [0, 21] };
+    for (let employeeId = 1; employeeId <= 18; employeeId++) {
+        const [w, wDue] = welcome[employeeId] ?? [4, -20];
+        enroll(1, employeeId, w, wDue);
+        const [s, sDue] = security[employeeId] ?? [4, -10];
+        enroll(2, employeeId, s, sDue);
+        const [r, rDue] = respect[employeeId] ?? [3, 21];
+        enroll(3, employeeId, r, rDue);
+    }
+
+    // Electives: [course, employee, completed modules, due in days]
+    const electives: [number, number, number, number?][] = [
+        [4, 7, 4, 30], [4, 17, 2, 30], [4, 1, 0, 30],
+        [5, 2, 5, 45], [5, 8, 3, 45], [5, 11, 1, 45], [5, 12, 0, 45], [5, 15, 2, 45],
+        [6, 3, 4, 60], [6, 9, 1, 60], [6, 13, 2, 60], [6, 5, 0, 60],
+        [7, 1, 5, 40], [7, 7, 2, 40], [7, 17, 0, 40], [7, 8, 1, 40],
+        [8, 4, 3], [8, 10, 1], [8, 14, 0],
+    ];
+    for (const [courseId, employeeId, completed, due] of electives) {
+        enroll(courseId, employeeId, completed, due);
+    }
+    return enrollments;
 }

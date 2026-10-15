@@ -22,6 +22,8 @@
   /* Single-series chart fill (validated sequential blue). */
   --series-1: #2a78d6;
   --grid: #e1e0d9;
+  /* Unfilled part of a progress meter: a lighter step of the same blue. */
+  --meter-track: #cde2fb;
 
   /* Status colors: always paired with a text label, never color alone. */
   --good: #0ca30c;
@@ -58,6 +60,7 @@
 
     --series-1: #3987e5;
     --grid: #2c2c2a;
+    --meter-track: #104281;
     --danger-text: #ef8a8a;
 
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -103,6 +106,9 @@ a {
 
 img { max-width: 100%; }
 
+/* Fieldsets default to min-content width, which overflows narrow screens. */
+fieldset { min-inline-size: 0; }
+
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -128,6 +134,8 @@ img { max-width: 100%; }
 /* ---------- Page structure ---------- */
 .page {
   display: grid;
+  /* minmax(0, …) so wide content can't stretch the page past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.25rem;
 }
 

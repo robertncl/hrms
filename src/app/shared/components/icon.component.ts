@@ -12,7 +12,8 @@ export type IconName =
   | 'search'
   | 'plus'
   | 'arrow-left'
-  | 'check';
+  | 'check'
+  | 'book';
 
 /** Small stroke icons (Feather-style), decorative unless given a label. */
 @Component({
@@ -74,6 +75,10 @@ export type IconName =
         }
         @case ('check') {
           <svg:polyline points="20 6 9 17 4 12" />
+        }
+        @case ('book') {
+          <svg:path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+          <svg:path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
         }
       }
     </svg>
