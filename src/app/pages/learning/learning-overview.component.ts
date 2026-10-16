@@ -8,6 +8,7 @@ import { CourseService } from 'src/app/services/course.service';
 import { EnrollmentService } from 'src/app/services/enrollment.service';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AuthService } from 'src/app/services/auth.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { BarListComponent, BarListItem } from 'src/app/shared/components/bar-list.component';
 import { IconComponent } from 'src/app/shared/components/icon.component';
@@ -57,12 +58,12 @@ import { COURSE_CATEGORIES, completionRate, formatDuration, isOverdue } from './
         <div class="panels">
           <section class="card">
             <div class="card-header">
-              <h2>Overdue training</h2>
-              <span class="muted small">{{ overdue().length }} assignments</span>
+              <h2>{{ canAssign() ? 'Overdue training' : 'Your overdue training' }}</h2>
+              <span class="muted small">{{ overdueList().length }} assignments</span>
             </div>
-            @if (overdue().length) {
+            @if (overdueList().length) {
               <ul class="list">
-                @for (enrollment of overdue().slice(0, 6); track enrollment.id) {
+                @for (enrollment of overdueList().slice(0, 6); track enrollment.id) {
                   <li>
                     <app-avatar [name]="employeeName(enrollment.employeeId)" size="2rem" />
                     <div class="grow">
@@ -74,7 +75,7 @@ import { COURSE_CATEGORIES, completionRate, formatDuration, isOverdue } from './
                 }
               </ul>
             } @else {
-              <p class="empty-state">Nothing overdue. Everyone is on track.</p>
+              <p class="empty-state">{{ canAssign() ? 'Nothing overdue. Everyone is on track.' : 'Nothing overdue. You are on track.' }}</p>
             }
           </section>
 
@@ -213,10 +214,13 @@ export class LearningOverviewComponent {
   private readonly courseService = inject(CourseService);
   private readonly enrollmentService = inject(EnrollmentService);
   private readonly employeeService = inject(EmployeeService);
+  private readonly user = inject(AuthService).currentUser;
 
   readonly categories = COURSE_CATEGORIES;
   readonly duration = formatDuration;
   canManage = toSignal(inject(PermissionsService).hasPermission('ManageCourses'), { initialValue: false });
+  canAssign = inject(PermissionsService).can('AssignTraining');
+  private readonly ownId = computed(() => this.user()?.employeeId);
 
   /** Bound from the `?category=` query parameter. */
   category = input<string>('');
@@ -251,6 +255,10 @@ export class LearningOverviewComponent {
     this.enrollments()
       .filter((e) => isOverdue(e))
       .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
+  );
+  /** The list people act on: everyone's for those who assign training, your own otherwise. */
+  overdueList = computed(() =>
+    this.canAssign() ? this.overdue() : this.overdue().filter((e) => e.employeeId === this.ownId()),
   );
   mandatoryRate = computed(() => {
     const mandatory = new Set(this.courses().filter((c) => c.mandatory).map((c) => c.id));

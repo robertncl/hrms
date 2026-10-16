@@ -1,12 +1,11 @@
 import { Component, inject, DestroyRef, OnInit, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Employee } from 'src/app/infrastructure/types/employee';
-import { EmployeeForm } from 'src/app/infrastructure/types/employee-form';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
-import { EmployeeFormFieldsComponent } from './employee-form-fields.component';
+import { EmployeeFormFieldsComponent, PRIVATE_CONTROLS, createEmployeeForm } from './employee-form-fields.component';
 
 @Component({
   selector: 'app-edit-employee',
@@ -32,11 +31,12 @@ import { EmployeeFormFieldsComponent } from './employee-form-fields.component';
 
         @if (!canEditPrivateDetails()) {
           <p class="alert alert-info">
-            Name and email are private details. Your role can see them but not change them.
+            Name, work email, phone and personal email are private details. Your role can change
+            someone's role, location and manager, but only HR can change private details.
           </p>
         }
 
-        <app-employee-form-fields [form]="form" />
+        <app-employee-form-fields [form]="form" [people]="people()" [selfId]="employee.id" />
 
         @if (error()) {
           <p class="alert alert-error" role="alert">{{ error() }}</p>
@@ -73,13 +73,9 @@ export class EditEmployeeComponent implements OnInit {
   saving = signal(false);
   error = signal('');
 
-  form = new FormGroup<EmployeeForm>({
-    firstName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    lastName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    email: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] }),
-    position: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    level: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-  });
+  form = createEmployeeForm();
+  /** For the "Reports to" picker. */
+  people = toSignal(this.employeeService.getEmployees(), { initialValue: [] });
 
   ngOnInit() {
     this.employee = this.route.snapshot.data['employee'] as Employee;
@@ -88,14 +84,12 @@ export class EditEmployeeComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(hasPermission => {
       this.canEditPrivateDetails.set(hasPermission);
-      if (!hasPermission) {
-        this.form.controls.firstName.disable();
-        this.form.controls.lastName.disable();
-        this.form.controls.email.disable();
-      } else {
-        this.form.controls.firstName.enable();
-        this.form.controls.lastName.enable();
-        this.form.controls.email.enable();
+      for (const name of PRIVATE_CONTROLS) {
+        if (hasPermission) {
+          this.form.controls[name].enable();
+        } else {
+          this.form.controls[name].disable();
+        }
       }
     });
   }

@@ -4,6 +4,7 @@ import { EmployeeDetailsComponent } from './employee-details.component';
 import { EditEmployeeComponent } from './edit-employee.component';
 import { CreateEmployeeComponent } from './create-employee.component';
 import { employeeDetailsResolver } from 'src/app/shared/resolvers/employee-details.resolver';
+import { permissionGuard } from 'src/app/shared/guards/permission.guard';
 
 export const routes: Routes = [
     { path: '', redirectTo: 'list', pathMatch: 'full' },
@@ -14,11 +15,17 @@ export const routes: Routes = [
         title: 'Employee',
         resolve: { employee: employeeDetailsResolver },
     },
-    { path: 'create', component: CreateEmployeeComponent, title: 'Add employee' },
+    {
+        path: 'create',
+        component: CreateEmployeeComponent,
+        title: 'Add employee',
+        canActivate: [permissionGuard('CreateEmployee', '/employees')],
+    },
     {
         path: 'edit/:id',
         component: EditEmployeeComponent,
         title: 'Edit employee',
+        canActivate: [permissionGuard('EditEmployeeGeneralDetails', '/employees')],
         resolve: { employee: employeeDetailsResolver },
     },
 ];

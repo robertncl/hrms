@@ -14,6 +14,7 @@ import { RouterLink } from '@angular/router';
 import { BehaviorSubject, forkJoin, switchMap } from 'rxjs';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { EmployeeService } from 'src/app/services/employee.service';
+import { PermissionsService } from 'src/app/services/permissions.service';
 import { ProjectService } from 'src/app/services/project.service';
 import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
@@ -33,7 +34,9 @@ const PAGE_SIZE = 12;
         </div>
         <div class="page-actions">
           <button class="btn" type="button" (click)="exportCsv()">Export CSV</button>
-          <a class="btn btn-primary" routerLink="/employees/create">Add person</a>
+          @if (canAdd()) {
+            <a class="btn btn-primary" routerLink="/employees/create">Add person</a>
+          }
         </div>
       </div>
 
@@ -94,16 +97,20 @@ const PAGE_SIZE = 12;
                 </td>
                 <td class="muted projects" data-label="Projects">{{ projectNames()[employee.id] || '—' }}</td>
                 <td class="actions">
-                  <a class="btn btn-icon" [routerLink]="['/employees/edit', employee.id]"
-                    [title]="'Edit ' + employee.firstName">
-                    <app-icon name="edit" [size]="16" />
-                    <span class="visually-hidden">Edit {{ employee.firstName }} {{ employee.lastName }}</span>
-                  </a>
-                  <button class="btn btn-icon" type="button" (click)="showConfirmationDialog(employee)"
-                    [title]="'Remove ' + employee.firstName">
-                    <app-icon name="x" [size]="16" />
-                    <span class="visually-hidden">Remove {{ employee.firstName }} {{ employee.lastName }}</span>
-                  </button>
+                  @if (canEdit()) {
+                    <a class="btn btn-icon" [routerLink]="['/employees/edit', employee.id]"
+                      [title]="'Edit ' + employee.firstName">
+                      <app-icon name="edit" [size]="16" />
+                      <span class="visually-hidden">Edit {{ employee.firstName }} {{ employee.lastName }}</span>
+                    </a>
+                  }
+                  @if (canRemove()) {
+                    <button class="btn btn-icon" type="button" (click)="showConfirmationDialog(employee)"
+                      [title]="'Remove ' + employee.firstName">
+                      <app-icon name="x" [size]="16" />
+                      <span class="visually-hidden">Remove {{ employee.firstName }} {{ employee.lastName }}</span>
+                    </button>
+                  }
                 </td>
               </tr>
             } @empty {
@@ -153,6 +160,11 @@ export class EmployeeListComponent {
   private readonly projectService = inject(ProjectService);
   private readonly timeOffRequestService = inject(TimeOffRequestService);
   private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly permissions = inject(PermissionsService);
+
+  canAdd = this.permissions.can('CreateEmployee');
+  canEdit = this.permissions.can('EditEmployeeGeneralDetails');
+  canRemove = this.permissions.can('DeleteEmployee');
 
   readonly positions: Employee['position'][] = ['Developer', 'Designer', 'QA', 'Manager'];
 

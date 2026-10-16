@@ -67,4 +67,26 @@ describe('PermissionsService', () => {
       done();
     });
   });
+
+  it('should expose a permission as a signal that follows changes', () => {
+    const canDelete = service.can('DeleteEmployee');
+    expect(canDelete()).toBeFalse();
+
+    service.setPermissions({ DeleteEmployee: true });
+    expect(canDelete()).toBeTrue();
+
+    service.clearPermissions();
+    expect(canDelete()).toBeFalse();
+  });
+
+  it('should replace the whole set rather than merge', (done) => {
+    service.setPermissions({ ViewEmployees: true, ManageCourses: true });
+    service.replacePermissions({ ViewEmployees: true });
+
+    expect(service.can('ManageCourses')()).toBeFalse();
+    service.hasPermission('ManageCourses').subscribe((value) => {
+      expect(value).toBeFalse();
+      done();
+    });
+  });
 });

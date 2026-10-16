@@ -19,6 +19,8 @@ import {
 import { RouterLink } from '@angular/router';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
 import { EmployeeService } from 'src/app/services/employee.service';
+import { AuthService } from 'src/app/services/auth.service';
+import { PermissionsService } from 'src/app/services/permissions.service';
 import { TimeOffManagementService } from 'src/app/services/time-off-management.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { enableLightDismissFallback } from 'src/app/shared/functions/light-dismiss';
@@ -50,9 +52,11 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
           <h1>Time off</h1>
           <p>{{ summary() }}</p>
         </div>
-        <div class="page-actions">
-          <button class="btn btn-primary" type="button" (click)="openNewRequest()">Request time off</button>
-        </div>
+        @if (canRequest()) {
+          <div class="page-actions">
+            <button class="btn btn-primary" type="button" (click)="openNewRequest()">Request time off</button>
+          </div>
+        }
       </div>
 
       <section class="card" aria-labelledby="timeline-title">
@@ -60,7 +64,7 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
           <h2 id="timeline-title">Next six weeks</h2>
           <div class="legend">
             <span><span class="swatch"></span>Approved</span>
-            <span><span class="swatch is-pending"></span>Waiting on you</span>
+            <span><span class="swatch is-pending"></span>{{ canApprove() ? 'Waiting on you' : 'Waiting for approval' }}</span>
             <span><span class="swatch is-today"></span>Today</span>
           </div>
         </div>
@@ -84,13 +88,13 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
       </section>
 
       <section class="card flush" aria-labelledby="queue-title">
-        <h2 id="queue-title" class="visually-hidden">Time off requests</h2>
+        <h2 id="queue-title" class="visually-hidden">{{ canApprove() ? 'Time off requests' : 'Your requests' }}</h2>
         <div class="tabs">
           @for (tab of tabs(); track tab.status) {
             <button class="tab" type="button" [attr.aria-selected]="status() === tab.status"
               (click)="status.set(tab.status)">{{ tab.label }} · {{ tab.count }}</button>
           }
-          @if (status() === 'Pending' && clearCount()) {
+          @if (canApprove() && status() === 'Pending' && clearCount()) {
             <button class="btn btn-sm push" type="button" (click)="approveClear()">
               Approve {{ clearCount() }} with no clashes
             </button>
@@ -113,12 +117,16 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
                   }
                 </div>
                 <div class="row-actions">
-                  @if (row.request.status === 'Pending') {
-                    <button class="btn btn-sm btn-ghost" type="button" (click)="reject(row.request)">Decline</button>
-                    <button class="btn btn-sm" type="button" (click)="approve(row.request)">Approve</button>
-                  } @else {
-                    <button class="btn btn-sm btn-quiet-danger" type="button"
-                      (click)="remove(row.request)">Delete</button>
+                  @if (canApprove()) {
+                    @if (row.request.status === 'Pending') {
+                      <button class="btn btn-sm btn-ghost" type="button" (click)="reject(row.request)">Decline</button>
+                      <button class="btn btn-sm" type="button" (click)="approve(row.request)">Approve</button>
+                    } @else {
+                      <button class="btn btn-sm btn-quiet-danger" type="button"
+                        (click)="remove(row.request)">Delete</button>
+                    }
+                  } @else if (row.request.status === 'Pending') {
+                    <button class="btn btn-sm btn-ghost" type="button" (click)="remove(row.request)">Withdraw</button>
                   }
                 </div>
               </div>
@@ -136,6 +144,9 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
         <div class="form-grid">
           <div class="field span-all">
             <label for="request-employee">Person</label>
+            @if (!canApprove()) {
+              <span class="hint">You can book time off for yourself. Your lead approves it.</span>
+            }
             <select id="request-employee" formControlName="employeeId" [attr.aria-invalid]="showError('employeeId')">
               <option [ngValue]="null" disabled>Choose a person</option>
               @for (employee of employees(); track employee.id) {
@@ -232,6 +243,13 @@ export class TimeOffManagementComponent {
 
   status = signal<Tab>('Pending');
 
+  private readonly user = inject(AuthService).currentUser;
+  canApprove = inject(PermissionsService).can('ApproveTimeOff');
+  /** The signed-in person's own People record, if they have one. */
+  private readonly ownId = computed(() => this.user()?.employeeId);
+  /** Approvers book for anyone; everyone else only for themselves. */
+  canRequest = computed(() => this.canApprove() || this.ownId() !== undefined);
+
   /** The service filters by type; the timeline and tabs need every request. */
   allRequests = this.timeOffsService.requests;
 
@@ -243,19 +261,22 @@ export class TimeOffManagementComponent {
 
   bars = computed(() => timelineBars(this.allRequests(), this.employees()));
 
+  /** Approvers work the whole queue; everyone else sees only their own requests. */
   private readonly rows = computed(() =>
-    this.allRequests().map((request) => {
-      const { text, clash } = clashInfo(request, this.allRequests(), this.employees());
-      const days = dayCount(request);
-      return {
-        request,
-        name: this.names().get(request.employeeId) ?? `Employee #${request.employeeId}`,
-        dates: formatRange(request.startDate, request.endDate),
-        days: `${days} ${days === 1 ? 'day' : 'days'}`,
-        impact: text,
-        clash,
-      };
-    }),
+    this.allRequests()
+      .filter((request) => this.canApprove() || request.employeeId === this.ownId())
+      .map((request) => {
+        const { text, clash } = clashInfo(request, this.allRequests(), this.employees());
+        const days = dayCount(request);
+        return {
+          request,
+          name: this.names().get(request.employeeId) ?? `Employee #${request.employeeId}`,
+          dates: formatRange(request.startDate, request.endDate),
+          days: `${days} ${days === 1 ? 'day' : 'days'}`,
+          impact: text,
+          clash,
+        };
+      }),
   );
 
   tabs = computed(() => {
@@ -281,19 +302,26 @@ export class TimeOffManagementComponent {
 
   summary = computed(() => {
     const waiting = this.rows().filter((row) => row.request.status === 'Pending').length;
+    if (!this.canApprove()) {
+      if (this.ownId() === undefined) return 'Who is out over the next six weeks.';
+      return waiting
+        ? `${waiting === 1 ? 'Your request is' : `${waiting} of your requests are`} waiting for approval.`
+        : 'Nothing of yours is waiting. Book time off and your lead is asked to approve it.';
+    }
     return waiting
       ? `${waiting} ${waiting === 1 ? 'request is' : 'requests are'} waiting. See who else is out before you decide.`
       : 'Nothing waiting. The next six weeks are below.';
   });
 
   emptyMessage = computed(() => {
+    const yours = !this.canApprove();
     switch (this.status()) {
       case 'Pending':
-        return 'Nothing waiting on you.';
+        return yours ? 'You have nothing waiting.' : 'Nothing waiting on you.';
       case 'Approved':
-        return 'Nothing approved yet.';
+        return yours ? 'None of your requests are approved yet.' : 'Nothing approved yet.';
       default:
-        return 'Nothing declined.';
+        return yours ? 'None of your requests were declined.' : 'Nothing declined.';
     }
   });
 
@@ -323,7 +351,20 @@ export class TimeOffManagementComponent {
 
   openNewRequest() {
     const today = daysFromToday(0);
-    this.newRequestForm.reset({ employeeId: null, type: 'Vacation', startDate: today, endDate: today, comment: '' });
+    const forSelf = !this.canApprove();
+    this.newRequestForm.reset({
+      employeeId: forSelf ? (this.ownId() ?? null) : null,
+      type: 'Vacation',
+      startDate: today,
+      endDate: today,
+      comment: '',
+    });
+    // Without approval rights the request can only be for yourself.
+    if (forSelf) {
+      this.newRequestForm.controls.employeeId.disable();
+    } else {
+      this.newRequestForm.controls.employeeId.enable();
+    }
     this.newRequestDialog().nativeElement.showModal();
   }
 

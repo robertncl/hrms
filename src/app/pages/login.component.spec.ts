@@ -5,6 +5,7 @@ import { Router, provideRouter } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { LoginComponent } from './login.component';
 import { AuthService } from '../services/auth.service';
+import { DEMO_ACCOUNTS } from '../demo/demo-data';
 
 describe('LoginComponent', () => {
   let component: LoginComponent;
@@ -112,5 +113,24 @@ describe('LoginComponent', () => {
     spyOn(component, 'submit');
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     expect(component.submit).toHaveBeenCalled();
+  });
+
+  it('should list every demo account with its role and what it can do', () => {
+    const accounts = Array.from(fixture.nativeElement.querySelectorAll('.demo button.use') as NodeListOf<HTMLButtonElement>);
+    expect(accounts.map((b) => b.querySelector('.email')!.textContent!.trim())).toEqual(DEMO_ACCOUNTS.map((a) => a.email));
+    expect(accounts.map((b) => b.querySelector('.role')!.textContent!.replace(/\s+/g, ' ').trim())).toEqual(
+      DEMO_ACCOUNTS.map((a) => `${a.role} · ${a.name}`),
+    );
+    expect(accounts[4].querySelector('.summary')!.textContent).toContain('her own time off');
+  });
+
+  it('should fill in an account when it is picked and mark it as chosen', () => {
+    const lead = Array.from(fixture.nativeElement.querySelectorAll('.demo button.use') as NodeListOf<HTMLButtonElement>)
+      .find((b) => b.textContent!.includes('lead@acme.com'))!;
+    lead.click();
+    fixture.detectChanges();
+
+    expect(component.credentials).toEqual({ email: 'lead@acme.com', password: 'demo' });
+    expect(lead.getAttribute('aria-pressed')).toBe('true');
   });
 });

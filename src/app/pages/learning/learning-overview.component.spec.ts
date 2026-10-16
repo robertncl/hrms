@@ -7,9 +7,9 @@ describe('LearningOverviewComponent', () => {
   let component: LearningOverviewComponent;
   let mocks: LearningMocks;
 
-  const render = async (canManage = true) => {
+  const render = async (canManage = true, canAssign = true, employeeId?: number) => {
     mocks = createLearningMocks();
-    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage) });
+    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage, canAssign, employeeId) });
     fixture = TestBed.createComponent(LearningOverviewComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -82,5 +82,21 @@ describe('LearningOverviewComponent', () => {
 
     await render(false);
     expect(el().textContent).not.toContain('New course');
+  });
+
+  describe('for a learner', () => {
+    it('should list only their own overdue training', async () => {
+      await render(false, false, 2);
+      expect(el().textContent).toContain('Your overdue training');
+      const items = el().querySelectorAll('.list li');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toContain('Grace Hopper');
+    });
+
+    it('should say when they are on track, whoever else is behind', async () => {
+      await render(false, false, 1);
+      expect(el().querySelectorAll('.list li').length).toBe(0);
+      expect(el().textContent).toContain('Nothing overdue. You are on track.');
+    });
   });
 });

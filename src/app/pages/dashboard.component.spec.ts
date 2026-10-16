@@ -13,11 +13,15 @@ import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { Candidate } from '../infrastructure/types/candidate';
 import { Course, Enrollment } from '../infrastructure/types/course';
-import { daysFromToday } from '../demo/demo-data';
+import { DemoRole, daysFromToday } from '../demo/demo-data';
+import { User } from '../infrastructure/types/user';
+import { grantRole } from 'src/testing/roles';
 
 describe('DashboardComponent', () => {
   let fixture: ComponentFixture<DashboardComponent>;
   let mockTimeOffRequestService: { getRequests: jasmine.Spy; approveRequest: jasmine.Spy; rejectRequest: jasmine.Spy };
+  let mockCandidateService: { getCandidates: jasmine.Spy };
+  const currentUser = signal<User | null>(null);
 
   const employee = (id: number, position: Employee['position'], isAvailable = true): Employee => ({
     id, firstName: `First${id}`, lastName: `Last${id}`, email: '', position, level: 'Senior', isAvailable, profilePicture: '',
@@ -56,6 +60,7 @@ describe('DashboardComponent', () => {
   const text = () => fixture.nativeElement.textContent as string;
 
   beforeEach(async () => {
+    mockCandidateService = { getCandidates: jasmine.createSpy('getCandidates').and.returnValue(of(candidates)) };
     mockTimeOffRequestService = {
       getRequests: jasmine.createSpy('getRequests').and.returnValue(of(requests)),
       approveRequest: jasmine.createSpy('approveRequest').and.returnValue(of({})),
@@ -68,17 +73,29 @@ describe('DashboardComponent', () => {
         provideRouter([]),
         { provide: EmployeeService, useValue: { getEmployees: () => of(employees) } },
         { provide: TimeOffRequestService, useValue: mockTimeOffRequestService },
-        { provide: CandidateService, useValue: { getCandidates: () => of(candidates) } },
+        { provide: CandidateService, useValue: mockCandidateService },
         { provide: EnrollmentService, useValue: { getEnrollments: () => of(enrollments) } },
         { provide: CourseService, useValue: { getCourses: () => of(courses) } },
         { provide: EnrollmentService, useValue: { getEnrollments: () => of(enrollments) } },
-        { provide: AuthService, useValue: { currentUser: signal({ name: 'Alex Morgan', email: '', role: '' }) } },
+        { provide: AuthService, useValue: { currentUser } },
       ],
     }).compileComponents();
 
+    render('HR Administrator');
+  });
+
+  /** Renders Home for someone signed in with `role`. */
+  const render = (role: DemoRole, employeeId?: number) => {
+    grantRole(role);
+    currentUser.set({ name: 'Alex Morgan', email: '', role, ...(employeeId ? { employeeId } : {}) });
+    mockCandidateService.getCandidates.calls.reset();
     fixture = TestBed.createComponent(DashboardComponent);
     fixture.detectChanges();
-  });
+  };
+  const tabLabels = () =>
+    Array.from(fixture.nativeElement.querySelectorAll('.chips .chip') as NodeListOf<HTMLElement>).map((c) => c.textContent!.trim());
+  const actionLabels = () =>
+    Array.from(fixture.nativeElement.querySelectorAll('.page-actions a') as NodeListOf<HTMLElement>).map((a) => a.textContent!.trim());
 
   it('should greet the signed-in user by first name', () => {
     expect(fixture.nativeElement.querySelector('h1').textContent).toMatch(/Good (morning|afternoon|evening), Alex/);
@@ -148,5 +165,49 @@ describe('DashboardComponent', () => {
 
     expect(mockTimeOffRequestService.approveRequest).toHaveBeenCalledWith(1);
     expect(mockTimeOffRequestService.getRequests).toHaveBeenCalledTimes(1);
+  });
+
+  describe('for other roles', () => {
+    it('should show an employee only their own overdue training, with nothing to approve', () => {
+      render('Employee', 1);
+
+      const rows = fixture.nativeElement.querySelectorAll('.row-item');
+      expect(rows.length).toBe(1);
+      expect(rows[0].textContent).toContain('Training overdue');
+      expect(tabLabels()).toEqual(['All 1', 'Training 1']);
+      expect(fixture.nativeElement.querySelector('.row-item button')).toBeNull();
+    });
+
+    it('should let an employee request time off but not add people or see hiring', () => {
+      render('Employee', 1);
+
+      expect(actionLabels()).toEqual(['Request time off']);
+      expect(fixture.nativeElement.querySelector('#pipeline-title')).toBeNull();
+      // Candidates are off limits, so they are not even fetched.
+      expect(mockCandidateService.getCandidates).not.toHaveBeenCalled();
+      expect(text()).toContain('Waiting for approval');
+    });
+
+    it('should leave someone else\'s overdue training off an employee\'s queue', () => {
+      render('Employee', 3);
+      expect(fixture.nativeElement.querySelectorAll('.row-item').length).toBe(0);
+      expect(text()).toContain('Nothing waiting on you');
+    });
+
+    it('should show a recruiter hiring but no time off or training decisions', () => {
+      render('Recruiter');
+
+      expect(tabLabels()).toEqual(['All 0', 'Hiring 0']);
+      expect(actionLabels()).toEqual(['Add person']);
+      expect(fixture.nativeElement.querySelector('#pipeline-title')).not.toBeNull();
+      expect(mockCandidateService.getCandidates).toHaveBeenCalled();
+    });
+
+    it('should show a team lead time off approvals and the team\'s training, but not "Add person"', () => {
+      render('Team Lead', 9);
+
+      expect(tabLabels()).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1']);
+      expect(actionLabels()).toEqual(['Request time off']);
+    });
   });
 });

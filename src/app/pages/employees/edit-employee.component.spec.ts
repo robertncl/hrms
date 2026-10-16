@@ -22,6 +22,14 @@ describe('EditEmployeeComponent', () => {
     level: 'Senior',
     isAvailable: true,
     profilePicture: '',
+    startDate: '2024-02-01',
+    location: 'Berlin',
+    managerId: 2,
+    phone: '+44 20 7946 0101',
+    personalEmail: 'john@example.com',
+  };
+  const manager: Employee = {
+    ...mockEmployee, id: 2, firstName: 'Olivia', lastName: 'Bennett', position: 'Manager', level: 'Lead', managerId: undefined,
   };
 
   let canEditPrivate = true;
@@ -30,6 +38,7 @@ describe('EditEmployeeComponent', () => {
   };
   const mockEmployeeService = {
     updateEmployee: jasmine.createSpy('updateEmployee').and.returnValue(of(mockEmployee)),
+    getEmployees: () => of([mockEmployee, manager]),
   };
   let navigateSpy: jasmine.Spy;
 
@@ -99,15 +108,45 @@ describe('EditEmployeeComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
 
-    expect(component.form.controls.firstName.disabled).toBeTrue();
-    expect(component.form.controls.email.disabled).toBeTrue();
+    for (const name of ['firstName', 'lastName', 'email', 'phone', 'personalEmail'] as const) {
+      expect(component.form.controls[name].disabled).withContext(name).toBeTrue();
+    }
+    // Employment details stay editable.
+    expect(component.form.controls.location.enabled).toBeTrue();
+    expect(component.form.controls.managerId.enabled).toBeTrue();
     expect(fixture.nativeElement.textContent).toContain('private details');
 
+    component.form.controls.location.setValue('Lisbon');
     component.submit();
     const changes = mockEmployeeService.updateEmployee.calls.mostRecent().args[1];
     expect(changes.firstName).toBeUndefined();
+    expect(changes.phone).toBeUndefined();
+    expect(changes.personalEmail).toBeUndefined();
     expect(changes.position).toBe('Developer');
+    expect(changes.location).toBe('Lisbon');
     canEditPrivate = true;
+  });
+
+  it('should load the employment and private details', () => {
+    expect(component.form.getRawValue()).toEqual(jasmine.objectContaining({
+      startDate: '2024-02-01',
+      location: 'Berlin',
+      managerId: 2,
+      phone: '+44 20 7946 0101',
+      personalEmail: 'john@example.com',
+    }));
+  });
+
+  it('should not offer the person as their own manager', () => {
+    const options = Array.from(fixture.nativeElement.querySelectorAll('#employee-manager option') as NodeListOf<HTMLOptionElement>)
+      .map((option) => option.textContent!.trim());
+    expect(options).toEqual(['Nobody', 'Olivia Bennett · Manager']);
+  });
+
+  it('should clear the manager when "Nobody" is chosen', () => {
+    component.form.controls.managerId.setValue(null);
+    component.submit();
+    expect(mockEmployeeService.updateEmployee.calls.mostRecent().args[1].managerId).toBeNull();
   });
 
   it('should submit when the form button is clicked', () => {

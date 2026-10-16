@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { switchMap } from 'rxjs';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { EmployeeService } from 'src/app/services/employee.service';
+import { PermissionsService } from 'src/app/services/permissions.service';
 import { CandidateWorkflow } from '../candidate-workflow';
 import { workEmail } from 'src/app/demo/demo-data';
 
@@ -30,13 +31,19 @@ const CHECKLIST = ['Laptop and equipment ordered', 'Accounts and access requeste
               </label>
             }
           </fieldset>
-          <div class="stage-actions">
-            <button class="btn btn-primary" [disabled]="workflow.saving() || !allDone()" (click)="hire()">
-              Create employee record
-            </button>
-          </div>
-          @if (!allDone()) {
-            <p class="muted small">Complete the checklist to create the employee record.</p>
+          @if (canCreateEmployee()) {
+            <div class="stage-actions">
+              <button class="btn btn-primary" [disabled]="workflow.saving() || !allDone()" (click)="hire()">
+                Create employee record
+              </button>
+            </div>
+            @if (!allDone()) {
+              <p class="muted small">Complete the checklist to create the employee record.</p>
+            }
+          } @else {
+            <p class="muted small">
+              When the checklist is done, a recruiter or HR administrator creates {{ candidate.firstName }}'s employee record.
+            </p>
           }
         }
       }
@@ -50,6 +57,8 @@ export class OnboardingPreparationComponent {
   @Input() candidateId!: number;
   readonly workflow = inject(CandidateWorkflow);
   private readonly employeeService = inject(EmployeeService);
+  /** Hiring managers prepare onboarding; adding someone to People is for recruiters and HR. */
+  canCreateEmployee = inject(PermissionsService).can('CreateEmployee');
   readonly checklist = CHECKLIST;
   done = signal(CHECKLIST.map(() => false));
   allDone = computed(() => this.done().every(Boolean));

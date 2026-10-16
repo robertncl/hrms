@@ -1,17 +1,24 @@
 import { Candidate } from '../infrastructure/types/candidate';
 import { Course, Enrollment } from '../infrastructure/types/course';
 import { Employee } from '../infrastructure/types/employee';
-import { Permissions } from '../infrastructure/types/permissions';
+import { ALL_PERMISSION_NAMES, Permissions } from '../infrastructure/types/permissions';
 import { Project } from '../infrastructure/types/project';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { User } from '../infrastructure/types/user';
 
+export type DemoRole = 'HR Administrator' | 'Team Lead' | 'Recruiter' | 'Learning Coordinator' | 'Employee';
+
+/** A sign-in. Permissions are never stored: they always come from the role. */
 export type DemoAccount = User & {
+    role: DemoRole;
     password: string;
-    permissions: Partial<Record<Permissions, boolean>>;
 };
 
+/** A built-in demo account, with a line for the sign-in page saying what it is for. */
+export type BuiltInDemoAccount = DemoAccount & { summary: string };
+
 export type DemoDatabase = {
+    /** Accounts created on the registration page. Built-in accounts live in code. */
     users: DemoAccount[];
     employees: Employee[];
     projects: Project[];
@@ -24,38 +31,78 @@ export type DemoDatabase = {
 
 export type StoredEnrollment = Omit<Enrollment, 'status' | 'progress'>;
 
-const ALL_PERMISSIONS: Record<Permissions, boolean> = {
-    ViewEmployees: true,
-    EditEmployeeGeneralDetails: true,
-    EditEmployeePrivateDetails: true,
-    DeleteEmployee: true,
-    CreateEmployee: true,
-    ManageCourses: true,
+/** What each kind of user may do. Everyone signed in can see People. */
+export const ROLE_PERMISSIONS: Record<DemoRole, Permissions[]> = {
+    'HR Administrator': ALL_PERMISSION_NAMES,
+    'Team Lead': ['ViewEmployees', 'EditEmployeeGeneralDetails', 'ApproveTimeOff', 'ManageHiring', 'AssignTraining'],
+    Recruiter: ['ViewEmployees', 'CreateEmployee', 'ManageHiring'],
+    'Learning Coordinator': ['ViewEmployees', 'AssignTraining', 'ManageCourses'],
+    Employee: ['ViewEmployees'],
 };
 
-export const DEMO_PASSWORD = 'demo';
+/**
+ * Every permission spelled out, true or false, so a sign-in never inherits a
+ * permission left over from a previous one.
+ */
+export function permissionsFor(role: string): Record<Permissions, boolean> {
+    const granted = new Set(ROLE_PERMISSIONS[role as DemoRole] ?? ROLE_PERMISSIONS.Employee);
+    return Object.fromEntries(ALL_PERMISSION_NAMES.map(name => [name, granted.has(name)])) as Record<Permissions, boolean>;
+}
 
-export const DEMO_ACCOUNTS: DemoAccount[] = [
+export const DEMO_PASSWORD = 'demo';
+export const DEMO_DOMAIN = 'acme.com';
+/** Where the demo accounts lived before the ACME People rebrand. */
+export const LEGACY_DEMO_DOMAIN = 'hrms.demo';
+
+export const DEMO_ACCOUNTS: BuiltInDemoAccount[] = [
     {
         name: 'Alex Morgan',
         email: 'admin@acme.com',
         role: 'HR Administrator',
         password: DEMO_PASSWORD,
-        permissions: ALL_PERMISSIONS,
+        summary: 'Everything, including private details and removing people.',
     },
     {
-        name: 'Sam Rivera',
+        name: 'Olivia Bennett',
         email: 'lead@acme.com',
         role: 'Team Lead',
+        employeeId: 1,
         password: DEMO_PASSWORD,
-        permissions: { ...ALL_PERMISSIONS, EditEmployeePrivateDetails: false, ManageCourses: false },
+        summary: 'Approves time off, runs hiring and assigns training. Edits roles, not private details.',
+    },
+    {
+        name: 'Priya Shah',
+        email: 'recruiter@acme.com',
+        role: 'Recruiter',
+        password: DEMO_PASSWORD,
+        summary: 'Runs the hiring board and adds new hires to People.',
+    },
+    {
+        name: 'Jordan Ellis',
+        email: 'learning@acme.com',
+        role: 'Learning Coordinator',
+        password: DEMO_PASSWORD,
+        summary: 'Owns the course catalog and assigns training.',
+    },
+    {
+        name: 'Charlotte Dubois',
+        email: 'employee@acme.com',
+        role: 'Employee',
+        employeeId: 15,
+        password: DEMO_PASSWORD,
+        summary: 'Self-service: books her own time off and works through her own training.',
     },
 ];
 
+/** "James O'Connor" -> "james.oconnor": the local part of an email address. */
+const emailName = (firstName: string, lastName: string) => {
+    const slug = (part: string) => part.normalize('NFD').replace(/[^a-zA-Z]/g, '').toLowerCase();
+    return `${slug(firstName)}.${slug(lastName)}`;
+};
+
 /** Company email from a person's name, e.g. "James O'Connor" -> james.oconnor@acme.com. */
 export function workEmail(firstName: string, lastName: string): string {
-    const slug = (part: string) => part.normalize('NFD').replace(/[^a-zA-Z]/g, '').toLowerCase();
-    return `${slug(firstName)}.${slug(lastName)}@acme.com`;
+    return `${emailName(firstName, lastName)}@${DEMO_DOMAIN}`;
 }
 
 /** ISO date (yyyy-mm-dd) `offset` days from today, so the demo always looks current. */
@@ -66,48 +113,76 @@ export function daysFromToday(offset: number, today = new Date()): string {
     return `${date.getFullYear()}-${month}-${day}`;
 }
 
+type EmployeeDetails = {
+    /** Days ago they started. */
+    startedDaysAgo: number;
+    location: NonNullable<Employee['location']>;
+    managerId?: number;
+};
+
 const employee = (
     id: number,
     firstName: string,
     lastName: string,
     position: Employee['position'],
     level: Employee['level'],
-    isAvailable = true,
-): Employee => ({
-    id,
-    firstName,
-    lastName,
-    email: workEmail(firstName, lastName),
-    position,
-    level,
-    isAvailable,
-    profilePicture: '',
-});
+    details: EmployeeDetails,
+    today: Date,
+): Employee => {
+    return {
+        id,
+        firstName,
+        lastName,
+        email: workEmail(firstName, lastName),
+        position,
+        level,
+        // The API derives this from approved time off; the seed value is a fallback.
+        isAvailable: true,
+        profilePicture: '',
+        startDate: daysFromToday(-details.startedDaysAgo, today),
+        location: details.location,
+        ...(details.managerId ? { managerId: details.managerId } : {}),
+        // 020 7946 0xxx is Ofcom's range reserved for fiction.
+        phone: `+44 20 7946 0${String(100 + id).padStart(3, '0')}`,
+        personalEmail: `${emailName(firstName, lastName)}@example.com`,
+    };
+};
 
 export function createDemoDatabase(today = new Date()): DemoDatabase {
     const day = (offset: number) => daysFromToday(offset, today);
 
+    const person = (
+        id: number,
+        firstName: string,
+        lastName: string,
+        position: Employee['position'],
+        level: Employee['level'],
+        details: EmployeeDetails,
+    ) => employee(id, firstName, lastName, position, level, details, today);
+
     return {
-        users: DEMO_ACCOUNTS.map(account => ({ ...account })),
+        users: [],
+        // Two teams: engineering under Olivia Bennett (with Evelyn Kim running
+        // delivery), and design and QA under Sophia Lindqvist.
         employees: [
-            employee(1, 'Olivia', 'Bennett', 'Manager', 'Lead'),
-            employee(2, 'Liam', 'Chen', 'Developer', 'Senior'),
-            employee(3, 'Ava', 'Patel', 'Designer', 'Senior'),
-            employee(4, 'Noah', 'Kowalski', 'Developer', 'Middle', false),
-            employee(5, 'Mia', 'Okafor', 'QA', 'Senior'),
-            employee(6, 'Ethan', 'Novak', 'Developer', 'Junior'),
-            employee(7, 'Sophia', 'Lindqvist', 'Manager', 'Senior'),
-            employee(8, 'Lucas', 'Moreau', 'Developer', 'Lead'),
-            employee(9, 'Isabella', 'Rossi', 'Designer', 'Middle', false),
-            employee(10, 'Mason', 'Tanaka', 'QA', 'Middle'),
-            employee(11, 'Amelia', 'García', 'Developer', 'Senior'),
-            employee(12, 'Elijah', 'Schmidt', 'Developer', 'Middle'),
-            employee(13, 'Harper', 'Nguyen', 'Designer', 'Junior'),
-            employee(14, 'James', "O'Connor", 'QA', 'Junior'),
-            employee(15, 'Charlotte', 'Dubois', 'Developer', 'Junior'),
-            employee(16, 'Benjamin', 'Haddad', 'Developer', 'Senior', false),
-            employee(17, 'Evelyn', 'Kim', 'Manager', 'Middle'),
-            employee(18, 'Henry', 'Silva', 'Developer', 'Middle'),
+            person(1, 'Olivia', 'Bennett', 'Manager', 'Lead', { startedDaysAgo: 2240, location: 'London' }),
+            person(2, 'Liam', 'Chen', 'Developer', 'Senior', { startedDaysAgo: 1530, location: 'London', managerId: 1 }),
+            person(3, 'Ava', 'Patel', 'Designer', 'Senior', { startedDaysAgo: 1260, location: 'London', managerId: 7 }),
+            person(4, 'Noah', 'Kowalski', 'Developer', 'Middle', { startedDaysAgo: 975, location: 'Berlin', managerId: 1 }),
+            person(5, 'Mia', 'Okafor', 'QA', 'Senior', { startedDaysAgo: 1830, location: 'Lisbon', managerId: 7 }),
+            person(6, 'Ethan', 'Novak', 'Developer', 'Junior', { startedDaysAgo: 270, location: 'Berlin', managerId: 1 }),
+            person(7, 'Sophia', 'Lindqvist', 'Manager', 'Senior', { startedDaysAgo: 2010, location: 'London' }),
+            person(8, 'Lucas', 'Moreau', 'Developer', 'Lead', { startedDaysAgo: 1826, location: 'Lisbon', managerId: 1 }),
+            person(9, 'Isabella', 'Rossi', 'Designer', 'Middle', { startedDaysAgo: 730, location: 'Remote', managerId: 7 }),
+            person(10, 'Mason', 'Tanaka', 'QA', 'Middle', { startedDaysAgo: 670, location: 'London', managerId: 7 }),
+            person(11, 'Amelia', 'García', 'Developer', 'Senior', { startedDaysAgo: 1095, location: 'Lisbon', managerId: 1 }),
+            person(12, 'Elijah', 'Schmidt', 'Developer', 'Middle', { startedDaysAgo: 820, location: 'Berlin', managerId: 1 }),
+            person(13, 'Harper', 'Nguyen', 'Designer', 'Junior', { startedDaysAgo: 210, location: 'London', managerId: 7 }),
+            person(14, 'James', "O'Connor", 'QA', 'Junior', { startedDaysAgo: 150, location: 'Remote', managerId: 7 }),
+            person(15, 'Charlotte', 'Dubois', 'Developer', 'Junior', { startedDaysAgo: 42, location: 'London', managerId: 1 }),
+            person(16, 'Benjamin', 'Haddad', 'Developer', 'Senior', { startedDaysAgo: 1460, location: 'London', managerId: 1 }),
+            person(17, 'Evelyn', 'Kim', 'Manager', 'Middle', { startedDaysAgo: 490, location: 'Remote', managerId: 1 }),
+            person(18, 'Henry', 'Silva', 'Developer', 'Middle', { startedDaysAgo: 610, location: 'Lisbon', managerId: 17 }),
         ],
         projects: [
             {
@@ -192,6 +267,8 @@ export function createDemoDatabase(today = new Date()): DemoDatabase {
             { id: 10, employeeId: 10, startDate: day(-7), endDate: day(-7), type: 'Sick Leave', status: 'Approved' },
             { id: 11, employeeId: 7, startDate: day(15), endDate: day(19), type: 'Vacation', status: 'Approved', comment: 'Ski trip' },
             { id: 12, employeeId: 17, startDate: day(40), endDate: day(130), type: 'Maternity Leave', status: 'Pending' },
+            // Charlotte (the Employee demo account) has a request waiting on her lead.
+            { id: 13, employeeId: 15, startDate: day(24), endDate: day(26), type: 'Vacation', status: 'Pending', comment: "Cousin's wedding in Lyon" },
         ],
         courses: DEMO_COURSES.map(course => ({ ...course, modules: [...course.modules] })),
         enrollments: createDemoEnrollments(today),

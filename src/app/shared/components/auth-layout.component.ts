@@ -47,6 +47,9 @@ import { WordmarkComponent } from './wordmark.component';
     .form-side {
       display: flex;
       flex-direction: column;
+      /* Keeps the brand, form and legal line apart when the form is taller
+         than the screen and the auto margins below collapse to nothing. */
+      gap: var(--acme-space-8);
       padding: var(--acme-space-12) var(--acme-space-16);
     }
 

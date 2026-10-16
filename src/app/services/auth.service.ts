@@ -1,6 +1,6 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, map, of } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { Permissions } from '../infrastructure/types/permissions';
 import { User } from '../infrastructure/types/user';
@@ -10,10 +10,15 @@ const TOKEN_KEY = 'token';
 const USER_KEY = 'user';
 const PERMISSIONS_KEY = 'permissions';
 
-type LoginResponse = {
-    token: string;
+type PermissionSet = Partial<Record<Permissions, boolean>>;
+
+type SessionResponse = {
     user?: User;
-    permissions?: Partial<Record<Permissions, boolean>>;
+    permissions?: PermissionSet;
+};
+
+type LoginResponse = SessionResponse & {
+    token: string;
 };
 
 @Injectable({providedIn: 'root'})
@@ -28,18 +33,9 @@ export class AuthService {
 
     login(credentials: { email: string, password: string }) {
         return this.http.post<LoginResponse>('/api/auth/login', credentials).pipe(
-            tap(({ token, user, permissions }) => {
+            tap(({ token, ...session }) => {
                 sessionStorage.setItem(TOKEN_KEY, token);
-                // Permissions only drive what the UI shows; the API must still
-                // enforce them server-side.
-                if (user) {
-                    sessionStorage.setItem(USER_KEY, JSON.stringify(user));
-                    this.currentUser.set(user);
-                }
-                if (permissions) {
-                    sessionStorage.setItem(PERMISSIONS_KEY, JSON.stringify(permissions));
-                    this.permissionsService.setPermissions(permissions);
-                }
+                this.applySession(session);
                 this.isAuth$.next(true);
             }),
         );
@@ -51,14 +47,7 @@ export class AuthService {
 
     logout() {
         return this.http.post('/api/auth/logout', {}).pipe(
-            tap(() => {
-                sessionStorage.removeItem(TOKEN_KEY);
-                sessionStorage.removeItem(USER_KEY);
-                sessionStorage.removeItem(PERMISSIONS_KEY);
-                this.currentUser.set(null);
-                this.permissionsService.clearPermissions();
-                this.isAuth$.next(false);
-            }),
+            tap(() => this.clearSession()),
         );
     }
 
@@ -66,12 +55,55 @@ export class AuthService {
         return sessionStorage.getItem(TOKEN_KEY);
     }
 
-    restoreSession(): void {
-        if (this.getToken()) {
-            this.currentUser.set(readJson<User>(USER_KEY));
-            this.permissionsService.setPermissions(readJson(PERMISSIONS_KEY) ?? {});
-            this.isAuth$.next(true);
+    /**
+     * Picks up a session saved in this tab, then asks the API whether it still
+     * holds. The saved copy makes the app usable at once; the check replaces
+     * permissions that have changed since (a role edited, a new permission
+     * shipped) and signs out a session the API no longer recognises.
+     *
+     * Completes once the check is done, so APP_INITIALIZER can wait for it.
+     */
+    restoreSession(): Observable<void> {
+        if (!this.getToken()) {
+            return of(undefined);
         }
+        this.currentUser.set(readJson<User>(USER_KEY));
+        this.permissionsService.replacePermissions(readJson<PermissionSet>(PERMISSIONS_KEY) ?? {});
+        this.isAuth$.next(true);
+
+        return this.http.get<SessionResponse>('/api/auth/session').pipe(
+            tap((session) => this.applySession(session)),
+            map(() => undefined),
+            catchError((error: HttpErrorResponse) => {
+                // Only a definite "no" signs out; a network blip keeps the saved session.
+                if (error.status === 401) {
+                    this.clearSession();
+                }
+                return of(undefined);
+            }),
+        );
+    }
+
+    private applySession({ user, permissions }: SessionResponse) {
+        // Permissions only drive what the UI shows; the API must still
+        // enforce them server-side.
+        if (user) {
+            sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+            this.currentUser.set(user);
+        }
+        if (permissions) {
+            sessionStorage.setItem(PERMISSIONS_KEY, JSON.stringify(permissions));
+            this.permissionsService.replacePermissions(permissions);
+        }
+    }
+
+    private clearSession() {
+        sessionStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(USER_KEY);
+        sessionStorage.removeItem(PERMISSIONS_KEY);
+        this.currentUser.set(null);
+        this.permissionsService.clearPermissions();
+        this.isAuth$.next(false);
     }
 }
 

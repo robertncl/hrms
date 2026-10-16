@@ -1029,14 +1029,15 @@ dialog > p { margin-bottom: var(--acme-space-4); font-size: var(--acme-text-sm);
 /* ---------- Description lists ---------- */
 .details-list {
   display: grid;
-  grid-template-columns: 110px 1fr;
+  /* minmax(0, …) so a long email address wraps instead of widening the card. */
+  grid-template-columns: 110px minmax(0, 1fr);
   gap: var(--acme-space-3) var(--acme-space-4);
   margin: 0;
   font-size: var(--acme-text-sm);
 }
 
 .details-list dt { color: var(--acme-color-text-muted); }
-.details-list dd { margin: 0; }
+.details-list dd { margin: 0; overflow-wrap: anywhere; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {

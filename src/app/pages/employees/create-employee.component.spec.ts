@@ -4,14 +4,28 @@ import { CreateEmployeeComponent } from './create-employee.component';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { Router, provideRouter } from '@angular/router';
 import { of } from 'rxjs';
+import { Employee } from 'src/app/infrastructure/types/employee';
+import { daysFromToday } from 'src/app/demo/demo-data';
 
 describe('CreateEmployeeComponent', () => {
   let component: CreateEmployeeComponent;
   let fixture: ComponentFixture<CreateEmployeeComponent>;
   let navigateSpy: jasmine.Spy;
 
+  const manager: Employee = {
+    id: 3, firstName: 'Olivia', lastName: 'Bennett', email: 'olivia.bennett@acme.com',
+    position: 'Manager', level: 'Lead', isAvailable: true, profilePicture: '',
+  };
   const mockEmployeeService = {
     createEmployee: jasmine.createSpy('createEmployee').and.returnValue(of({ id: 7 })),
+    getEmployees: () => of([manager]),
+  };
+  const basics = {
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane.smith@example.com',
+    position: 'Developer',
+    level: 'Junior',
   };
 
   beforeEach(async () => {
@@ -45,18 +59,47 @@ describe('CreateEmployeeComponent', () => {
     expect(mockEmployeeService.createEmployee).not.toHaveBeenCalled();
   });
 
-  it('should call employeeService.createEmployee with the form value when the form is valid', () => {
-    component.form.setValue({
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@example.com',
-      position: 'Developer',
-      level: 'Junior',
+  it('should send the basics and start date, leaving empty optional fields out', () => {
+    component.form.patchValue(basics);
+
+    component.submit();
+
+    expect(mockEmployeeService.createEmployee).toHaveBeenCalledWith({ ...basics, startDate: daysFromToday(0) });
+  });
+
+  it('should send the employment and private details when given', () => {
+    component.form.patchValue({
+      ...basics,
+      startDate: '2026-11-02',
+      location: 'Lisbon',
+      managerId: 3,
+      phone: '+44 20 7946 0999',
+      personalEmail: 'jane@example.com',
     });
 
     component.submit();
 
-    expect(mockEmployeeService.createEmployee).toHaveBeenCalledWith(component.form.value);
+    expect(mockEmployeeService.createEmployee).toHaveBeenCalledWith({
+      ...basics,
+      startDate: '2026-11-02',
+      location: 'Lisbon',
+      managerId: 3,
+      phone: '+44 20 7946 0999',
+      personalEmail: 'jane@example.com',
+    });
+  });
+
+  it('should offer everyone as a manager', () => {
+    const options = Array.from(fixture.nativeElement.querySelectorAll('#employee-manager option') as NodeListOf<HTMLOptionElement>)
+      .map((option) => option.textContent!.trim());
+    expect(options).toEqual(['Nobody', 'Olivia Bennett · Manager']);
+  });
+
+  it('should reject a malformed phone number or personal email', () => {
+    component.form.controls.phone.setValue('call me');
+    component.form.controls.personalEmail.setValue('nope');
+    expect(component.form.controls.phone.hasError('pattern')).toBeTrue();
+    expect(component.form.controls.personalEmail.hasError('email')).toBeTrue();
   });
 
   it('should update firstName control when the input value changes', () => {
@@ -69,13 +112,7 @@ describe('CreateEmployeeComponent', () => {
   });
 
   it('should open the new employee profile after saving', () => {
-    component.form.setValue({
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane.smith@example.com',
-      position: 'Developer',
-      level: 'Junior',
-    });
+    component.form.patchValue(basics);
     component.submit();
     expect(navigateSpy).toHaveBeenCalledWith(['/employees/details', 7]);
   });

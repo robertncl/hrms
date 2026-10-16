@@ -10,9 +10,9 @@ describe('CourseDetailsComponent', () => {
   let mocks: LearningMocks;
   let navigateSpy: jasmine.Spy;
 
-  const render = async (courseId = 1, canManage = true) => {
+  const render = async (courseId = 1, canManage = true, canAssign = true, employeeId?: number) => {
     mocks = createLearningMocks();
-    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage) });
+    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage, canAssign, employeeId) });
     navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     fixture = TestBed.createComponent(CourseDetailsComponent);
     component = fixture.componentInstance;
@@ -122,5 +122,31 @@ describe('CourseDetailsComponent', () => {
   it('should explain when the course does not exist', async () => {
     await render(404);
     expect(el().textContent).toContain('Course not found');
+  });
+
+  describe('for a learner', () => {
+    it('should show only their own progress, with no assigning', async () => {
+      await render(1, false, false, 2);
+      expect(el().textContent).toContain('Your progress');
+      expect(rows().map((r) => r.querySelector('.person a')!.textContent!.trim())).toEqual(['Grace Hopper']);
+      expect(button(el(), 'Assign employees')).toBeUndefined();
+      expect(button(rows()[0], 'Unenroll')).toBeUndefined();
+    });
+
+    it('should let them log their own progress', async () => {
+      await render(1, false, false, 2);
+      button(rows()[0], 'Log module').click();
+      expect(mocks.enrollmentService.setCompletedModules).toHaveBeenCalledWith(2, 2);
+    });
+
+    it('should keep the course summary company-wide', async () => {
+      await render(1, false, false, 2);
+      expect(el().querySelector('.details-list')!.textContent).toContain('3');
+    });
+
+    it('should say so when they are not enrolled', async () => {
+      await render(1, false, false, 99);
+      expect(el().textContent).toContain("You aren't enrolled in this course.");
+    });
   });
 });

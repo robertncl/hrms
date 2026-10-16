@@ -7,6 +7,10 @@ import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.ty
 import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { EmployeeService } from 'src/app/services/employee.service';
+import { AuthService } from 'src/app/services/auth.service';
+import { User } from 'src/app/infrastructure/types/user';
+import { DemoRole } from 'src/app/demo/demo-data';
+import { grantRole } from 'src/testing/roles';
 
 describe('TimeOffManagementComponent', () => {
   let component: TimeOffManagementComponent;
@@ -33,6 +37,7 @@ describe('TimeOffManagementComponent', () => {
     },
   ];
 
+  const currentUser = signal<User | null>(null);
   let requestsSignal: ReturnType<typeof signal<TimeOffRequest[]>>;
   let selectedTypeSignal: ReturnType<typeof signal<string>>;
   let mockTimeOffsService: {
@@ -71,13 +76,21 @@ describe('TimeOffManagementComponent', () => {
           },
         },
         { provide: TimeOffManagementService, useValue: mockTimeOffsService },
+        { provide: AuthService, useValue: { currentUser } },
       ],
     }).compileComponents();
 
+    render('HR Administrator');
+  });
+
+  /** Renders the page for someone signed in with `role`. */
+  function render(role: DemoRole, employeeId?: number) {
+    grantRole(role);
+    currentUser.set({ name: 'Test', email: '', role, ...(employeeId ? { employeeId } : {}) });
     fixture = TestBed.createComponent(TimeOffManagementComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-  });
+  }
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -198,5 +211,56 @@ describe('TimeOffManagementComponent', () => {
     spyOn(component, 'submitNewRequest');
     (fixture.nativeElement.querySelector('dialog button[type="submit"]') as HTMLButtonElement).click();
     expect(component.submitNewRequest).toHaveBeenCalled();
+  });
+
+  describe('self-service', () => {
+    const buttonLabels = (row: HTMLElement) =>
+      Array.from(row.querySelectorAll('button')).map((b) => b.textContent!.trim());
+
+    it("should show an employee only their own requests, with Withdraw instead of Approve", () => {
+      render('Employee', 10);
+
+      expect(tabLabels()).toEqual(['Waiting · 1', 'Approved · 0', 'Declined · 0']);
+      expect(rows().length).toBe(1);
+      expect(buttonLabels(rows()[0])).toEqual(['Withdraw']);
+      expect(fixture.nativeElement.textContent).not.toContain('with no clashes');
+      expect(fixture.nativeElement.textContent).toContain('Your request is waiting for approval.');
+      expect(fixture.nativeElement.textContent).toContain('Waiting for approval');
+    });
+
+    it('should withdraw an employee\'s pending request', () => {
+      render('Employee', 10);
+      (rows()[0].querySelector('button') as HTMLButtonElement).click();
+      expect(mockTimeOffsService.deleteRequest).toHaveBeenCalledWith(mockRequests[0]);
+    });
+
+    it('should book time off only for the employee themselves', () => {
+      render('Employee', 10);
+      component.openNewRequest();
+      fixture.detectChanges();
+
+      expect(component.newRequestForm.controls.employeeId.disabled).toBeTrue();
+      expect(component.newRequestForm.controls.employeeId.value).toBe(10);
+      component.newRequestForm.patchValue({ type: 'Vacation', startDate: '2026-04-01', endDate: '2026-04-02' });
+      component.submitNewRequest();
+      expect(mockTimeOffsService.createRequest).toHaveBeenCalledWith(jasmine.objectContaining({ employeeId: 10 }));
+    });
+
+    it('should let an approver book for anyone again after a self-service sign-in', () => {
+      render('Employee', 10);
+      component.openNewRequest();
+      render('Team Lead', 1);
+      component.openNewRequest();
+      expect(component.newRequestForm.controls.employeeId.enabled).toBeTrue();
+      expect(component.newRequestForm.controls.employeeId.value).toBeNull();
+    });
+
+    it('should give someone without a People record the calendar but no booking', () => {
+      render('Recruiter');
+
+      expect(fixture.nativeElement.querySelector('.page-actions')).toBeNull();
+      expect(rows().length).toBe(0);
+      expect(fixture.nativeElement.textContent).toContain('Who is out over the next six weeks.');
+    });
   });
 });

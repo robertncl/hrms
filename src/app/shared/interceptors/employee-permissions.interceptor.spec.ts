@@ -37,12 +37,7 @@ describe('employeePermissionsInterceptor', () => {
     req.flush([{ id: 1 }]);
 
     expect(response).toEqual([{ id: 1 }]);
-    expect(mockPermissionsService.hasPermissions).toHaveBeenCalledWith([
-      'CreateEmployee',
-      'DeleteEmployee',
-      'EditEmployeeGeneralDetails',
-      'ViewEmployees',
-    ]);
+    expect(mockPermissionsService.hasPermissions).toHaveBeenCalledWith(['ViewEmployees']);
   });
 
   it('should filter out the response for /employees requests when permissions are not granted', () => {
