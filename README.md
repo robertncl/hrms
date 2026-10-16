@@ -6,12 +6,12 @@ Run `npm install` first. The commands below use the project's local Angular CLI 
 
 ## Demo
 
-HRMS runs as a self-contained demo: an in-browser mock API (`src/app/demo/`) serves seed data for 18 employees, 6 projects, 10 candidates and a set of time off requests, so no backend is needed. Start the dev server and sign in with either account (password `demo`):
+HRMS runs as a self-contained demo: an in-browser mock API (`src/app/demo/`) serves seed data for 18 employees, 6 projects, 10 candidates, 8 courses and a set of time off requests, so no backend is needed. Start the dev server and sign in with either account (password `demo`):
 
-| Account | Role | Can edit names and emails |
-| --- | --- | --- |
-| `admin@hrms.demo` | HR Administrator | Yes |
-| `lead@hrms.demo` | Team Lead | No (view only) |
+| Account | Role | Can edit names and emails | Can manage courses |
+| --- | --- | --- | --- |
+| `admin@hrms.demo` | HR Administrator | Yes | Yes |
+| `lead@hrms.demo` | Team Lead | No (view only) | No (can still assign courses) |
 
 You can also create your own account on the registration page.
 
@@ -22,10 +22,11 @@ What you can do:
 - **Projects**: browse projects, their teams and subprojects.
 - **Time off**: file, approve, reject and delete requests. Approving leave that covers today marks the person as on leave.
 - **Recruitment**: move candidates from CV screening through interview, offer and onboarding, ending with an employee record.
+- **Learning**: browse the course catalog, see completion and overdue training, assign courses to people with a due date, log their progress, and create, edit or delete courses. Mandatory courses are assigned to every new employee automatically, due 30 days after they start. Each employee's profile shows their training.
 
 Changes are saved to `localStorage`, so they survive a reload. The refresh button in the header restores the original data. Dates in the seed data are relative to today, so the demo always looks current.
 
-To point the app at a real API instead, set `demo: false` and `apiUrl` in `src/environments/environment*.ts`. The mock API follows the same json-server style routes the services already call (`/employees`, `/employees/:id`, `?firstName_like=`) plus `/api/auth/login`, `/api/auth/logout` and `/api/auth/register`.
+To point the app at a real API instead, set `demo: false` and `apiUrl` in `src/environments/environment*.ts`. The mock API follows the same json-server style routes the services already call (`/employees`, `/employees/:id`, `?firstName_like=`) plus `/api/auth/login`, `/api/auth/logout` and `/api/auth/register`. Learning uses `/courses` and `/enrollments` (filterable by `courseId` and `employeeId`); the API derives each enrollment's `status` and `progress` from `completedModules`.
 
 ## Development server
 

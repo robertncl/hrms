@@ -6,6 +6,8 @@ import { forkJoin } from 'rxjs';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AuthService } from '../services/auth.service';
 import { CandidateService } from '../services/candidate.service';
+import { CourseService } from '../services/course.service';
+import { EnrollmentService } from '../services/enrollment.service';
 import { EmployeeService } from '../services/employee.service';
 import { NotificationService } from '../services/notification.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
@@ -263,6 +265,8 @@ export class ShellComponent {
   private readonly employeeService = inject(EmployeeService);
   private readonly timeOffRequestService = inject(TimeOffRequestService);
   private readonly candidateService = inject(CandidateService);
+  private readonly courseService = inject(CourseService);
+  private readonly enrollmentService = inject(EnrollmentService);
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
 
   readonly navItems: NavItem[] = [
@@ -271,6 +275,7 @@ export class ShellComponent {
     { label: 'Projects', link: '/work/projects', icon: 'briefcase' },
     { label: 'Time off', link: '/work/time-off', icon: 'calendar' },
     { label: 'Hiring', link: '/recruitment', icon: 'user-plus' },
+    { label: 'Learning', link: '/learning', icon: 'book' },
   ];
 
   user = this.authService.currentUser;
@@ -284,6 +289,8 @@ export class ShellComponent {
       employees: this.employeeService.getEmployees(),
       requests: this.timeOffRequestService.getRequests(),
       candidates: this.candidateService.getCandidates(),
+      enrollments: this.enrollmentService.getEnrollments(),
+      courses: this.courseService.getCourses(),
     }),
   );
 
@@ -293,7 +300,15 @@ export class ShellComponent {
    */
   decisionCount = computed(() => {
     const data = this.queueData();
-    return data ? buildDecisionQueue(data.requests, data.candidates, data.employees).length : 0;
+    return data
+      ? buildDecisionQueue(
+          data.requests,
+          data.candidates,
+          data.employees,
+          data.enrollments,
+          data.courses,
+        ).length
+      : 0;
   });
 
   initials = computed(() =>

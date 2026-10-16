@@ -13,7 +13,7 @@ export type IconName =
   | 'plus'
   | 'arrow-left'
   | 'check'
-  | 'book-open'
+  | 'book'
   | 'x'
   | 'edit'
   | 'more-horizontal'
@@ -80,8 +80,9 @@ export type IconName =
         @case ('check') {
           <svg:polyline points="20 6 9 17 4 12" />
         }
-        @case ('book-open') {
-          <svg:path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+        @case ('book') {
+          <svg:path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+          <svg:path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
         }
         @case ('x') {
           <svg:path d="M18 6 6 18" />

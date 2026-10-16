@@ -7,6 +7,7 @@ import { Employee } from '../infrastructure/types/employee';
 import { Project } from '../infrastructure/types/project';
 import { Candidate } from '../infrastructure/types/candidate';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
+import { Course, Enrollment } from '../infrastructure/types/course';
 
 describe('DemoBackend', () => {
   let http: HttpClient;
@@ -134,5 +135,83 @@ describe('DemoBackend', () => {
   it('should build plain ASCII work emails from names', () => {
     expect(workEmail('James', "O'Connor")).toBe('james.oconnor@acme.com');
     expect(workEmail('Amelia', 'García')).toBe('amelia.garcia@acme.com');
+  });
+
+  describe('learning', () => {
+    it('should derive enrollment status and progress from completed modules', async () => {
+      const course = await request(http.get<Course>('/courses/5'));
+      const created = await request(http.post<Enrollment>('/enrollments', { courseId: 5, employeeId: 18 }));
+      expect(created.status).toBe('Not started');
+      expect(created.progress).toBe(0);
+
+      const started = await request(http.patch<Enrollment>(`/enrollments/${created.id}`, { completedModules: 2 }));
+      expect(started.status).toBe('In progress');
+      expect(started.progress).toBe(Math.round((2 / course.modules.length) * 100));
+      expect(started.completedAt).toBeUndefined();
+
+      const done = await request(http.patch<Enrollment>(`/enrollments/${created.id}`, { completedModules: 99 }));
+      expect(done.completedModules).toBe(course.modules.length);
+      expect(done.status).toBe('Completed');
+      expect(done.progress).toBe(100);
+      expect(done.completedAt).toBe(daysFromToday(0));
+
+      const reopened = await request(http.patch<Enrollment>(`/enrollments/${created.id}`, { completedModules: 1 }));
+      expect(reopened.completedAt).toBeUndefined();
+    });
+
+    it('should not store the derived fields', async () => {
+      const created = await request(http.post<Enrollment>('/enrollments', { courseId: 5, employeeId: 18, status: 'Completed' }));
+      const stored = JSON.parse(localStorage.getItem('acme-people-db')!).enrollments.find((e: Enrollment) => e.id === created.id);
+      expect(stored.status).toBeUndefined();
+      expect(created.status).toBe('Not started');
+    });
+
+    it('should filter enrollments by employee and course', async () => {
+      const forEmployee = await request(http.get<Enrollment[]>('/enrollments?employeeId=2'));
+      expect(forEmployee.length).toBeGreaterThan(0);
+      expect(forEmployee.every(e => e.employeeId === 2)).toBeTrue();
+
+      const forCourse = await request(http.get<Enrollment[]>('/enrollments?courseId=1'));
+      expect(forCourse.length).toBe(seed.employees.length);
+    });
+
+    it('should reject a duplicate enrollment and an unknown course', async () => {
+      await expectError(request(http.post('/enrollments', { courseId: 1, employeeId: 1 })), 409);
+      await expectError(request(http.post('/enrollments', { courseId: 999, employeeId: 1 })), 400);
+    });
+
+    it('should enroll a new employee in every mandatory course', async () => {
+      const created = await request(http.post<Employee>('/employees', {
+        firstName: 'New', lastName: 'Hire', email: 'n@h.demo', position: 'QA', level: 'Junior',
+      }));
+      const enrollments = await request(http.get<Enrollment[]>(`/enrollments?employeeId=${created.id}`));
+
+      const mandatory = seed.courses.filter(c => c.mandatory).map(c => c.id);
+      expect(enrollments.map(e => e.courseId).sort()).toEqual(mandatory.sort());
+      expect(enrollments.every(e => e.dueDate === daysFromToday(30))).toBeTrue();
+    });
+
+    it('should remove enrollments with their employee or course', async () => {
+      await request(http.delete('/employees/2'));
+      await request(http.delete('/courses/1'));
+
+      const enrollments = await request(http.get<Enrollment[]>('/enrollments'));
+      expect(enrollments.some(e => e.employeeId === 2 || e.courseId === 1)).toBeFalse();
+    });
+
+    it('should add learning data to demo data saved before it existed', () => {
+      const old = createDemoDatabase() as Partial<typeof seed>;
+      old.employees = old.employees!.filter(e => e.id !== 3);
+      delete old.courses;
+      delete old.enrollments;
+      localStorage.setItem('acme-people-db', JSON.stringify(old));
+
+      const migrated = TestBed.runInInjectionContext(() => new DemoBackend());
+      const db = JSON.parse(JSON.stringify((migrated as unknown as { db: typeof seed }).db)) as typeof seed;
+      expect(db.employees.length).toBe(seed.employees.length - 1);
+      expect(db.courses.length).toBe(seed.courses.length);
+      expect(db.enrollments.some(e => e.employeeId === 3)).toBeFalse();
+      expect(db.enrollments.length).toBeGreaterThan(0);
+    });
   });
 });

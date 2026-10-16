@@ -9,7 +9,12 @@ import { EmployeeService } from 'src/app/services/employee.service';
 import { ProjectService } from 'src/app/services/project.service';
 import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
-import { clashInfo, dayCount, formatRange } from 'src/app/shared/functions/absence';
+import { ProgressMeterComponent } from 'src/app/shared/components/progress-meter.component';
+import { CourseService } from 'src/app/services/course.service';
+import { EnrollmentService } from 'src/app/services/enrollment.service';
+import { Enrollment } from 'src/app/infrastructure/types/course';
+import { enrollmentLabel, enrollmentTone, isOverdue } from '../learning/learning';
+import { clashInfo, dayCount, formatDay, formatRange } from 'src/app/shared/functions/absence';
 import { awayLabels } from './people-table';
 
 @Component({
@@ -90,6 +95,38 @@ import { awayLabels } from './people-table';
               <p class="loading">Loading projects…</p>
             }
           </section>
+
+          <section class="card" aria-labelledby="learning-title">
+            <div class="card-header">
+              <h2 id="learning-title">Learning</h2>
+              @if (training().length) {
+                <span class="small muted">{{ completedTraining() }} of {{ training().length }} complete</span>
+              }
+            </div>
+            @if (loaded()) {
+              @if (training().length) {
+                <div class="rows learning-rows">
+                  @for (item of training(); track item.enrollment.id) {
+                    <div class="learning-row">
+                      <div class="l-body">
+                        <a [routerLink]="['/learning/courses', item.enrollment.courseId]">{{ item.title }}</a>
+                        <span class="muted small">{{ dueLabel(item.enrollment) }}</span>
+                      </div>
+                      <app-progress-meter [value]="item.enrollment.progress"
+                        [label]="item.title + ' progress'" />
+                      <span [class]="'badge badge-' + tone(item.enrollment)">
+                        {{ courseStatus(item.enrollment) }}
+                      </span>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="muted small">No training assigned.</p>
+              }
+            } @else {
+              <p class="loading">Loading training…</p>
+            }
+          </section>
         </div>
 
         <div class="stack">
@@ -130,6 +167,7 @@ import { awayLabels } from './people-table';
           </section>
         </div>
       </div>
+
     </div>
     `,
   styles: `
@@ -183,9 +221,25 @@ import { awayLabels } from './people-table';
       text-overflow: ellipsis;
     }
     .t-body strong { font-size: var(--acme-text-sm); }
+
+    .learning-row {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(7rem, 1fr) 6.5rem;
+      align-items: center;
+      gap: var(--acme-space-2) var(--acme-space-5);
+      padding: var(--acme-space-3) 0;
+      border-top: 1px solid var(--app-hairline);
+    }
+    .l-body { display: grid; min-width: 0; }
+    .l-body a { font-weight: 600; text-decoration: none; }
+    .learning-row .badge { justify-self: start; }
+
+    @media (max-width: 560px) {
+      .learning-row { grid-template-columns: minmax(0, 1fr); }
+    }
   `,
   standalone: true,
-  imports: [NgOptimizedImage, RouterLink, AvatarComponent],
+  imports: [NgOptimizedImage, RouterLink, AvatarComponent, ProgressMeterComponent],
 })
 export class EmployeeDetailsComponent implements OnInit {
   @Input() employee!: Employee;
@@ -193,8 +247,12 @@ export class EmployeeDetailsComponent implements OnInit {
   private readonly projectService = inject(ProjectService);
   private readonly employeeService = inject(EmployeeService);
   private readonly timeOffRequestService = inject(TimeOffRequestService);
+  private readonly courseService = inject(CourseService);
+  private readonly enrollmentService = inject(EnrollmentService);
 
   formatRange = formatRange;
+  tone = enrollmentTone;
+  courseStatus = enrollmentLabel;
 
   projects = signal<Project[]>([]);
   loaded = signal(false);
@@ -202,6 +260,11 @@ export class EmployeeDetailsComponent implements OnInit {
 
   private readonly requests = signal<TimeOffRequest[]>([]);
   private readonly colleagues = signal<Employee[]>([]);
+  /** This person's courses, overdue first, then unfinished, then completed. */
+  training = signal<{ enrollment: Enrollment; title: string }[]>([]);
+  completedTraining = computed(
+    () => this.training().filter((item) => item.enrollment.status === 'Completed').length,
+  );
   private readonly away = signal<Record<number, string>>({});
 
   get fullName(): string {
@@ -232,17 +295,41 @@ export class EmployeeDetailsComponent implements OnInit {
       projects: this.projectService.getProjectsByEmployeeId(this.employee.id),
       employees: this.employeeService.getEmployees(),
       requests: this.timeOffRequestService.getRequests(),
-    }).subscribe(({ projects, employees, requests }) => {
+      enrollments: this.enrollmentService.getEnrollmentsByEmployee(this.employee.id),
+      courses: this.courseService.getCourses(),
+    }).subscribe(({ projects, employees, requests, enrollments, courses }) => {
       this.projects.set(projects);
       this.colleagues.set(employees);
       this.requests.set(requests);
       this.away.set(awayLabels(requests));
+
+      const titles = new Map(courses.map((course) => [course.id, course.title]));
+      // Overdue first: that is the row somebody has to act on.
+      const rank = (enrollment: Enrollment) =>
+        isOverdue(enrollment) ? 0 : enrollment.status === 'Completed' ? 2 : 1;
+      this.training.set(
+        enrollments
+          .map((enrollment) => ({
+            enrollment,
+            title: titles.get(enrollment.courseId) ?? `Course #${enrollment.courseId}`,
+          }))
+          .sort((a, b) => rank(a.enrollment) - rank(b.enrollment)),
+      );
+
       this.loaded.set(true);
     });
   }
 
   statusLabel(): string {
     return this.employee.isAvailable ? 'In today' : (this.away()[this.employee.id] ?? 'Away');
+  }
+
+  /** "Completed 3 Oct", "Due 20 Oct", or "No due date". */
+  dueLabel(enrollment: Enrollment): string {
+    if (enrollment.status === 'Completed') {
+      return enrollment.completedAt ? `Completed ${formatDay(enrollment.completedAt)}` : 'Completed';
+    }
+    return enrollment.dueDate ? `Due ${formatDay(enrollment.dueDate)}` : 'No due date';
   }
 
   days(request: TimeOffRequest): string {

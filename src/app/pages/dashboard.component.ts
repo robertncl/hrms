@@ -6,6 +6,9 @@ import { BehaviorSubject, forkJoin, switchMap } from 'rxjs';
 import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
+import { CourseService } from '../services/course.service';
+import { EnrollmentService } from '../services/enrollment.service';
+import { completionRate, isOverdue } from './learning/learning';
 import { AuthService } from '../services/auth.service';
 import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
@@ -225,6 +228,8 @@ export class DashboardComponent {
   private readonly employeeService = inject(EmployeeService);
   private readonly timeOffRequestService = inject(TimeOffRequestService);
   private readonly candidateService = inject(CandidateService);
+  private readonly courseService = inject(CourseService);
+  private readonly enrollmentService = inject(EnrollmentService);
   private readonly user = inject(AuthService).currentUser;
 
   readonly today = new Date();
@@ -242,6 +247,8 @@ export class DashboardComponent {
           employees: this.employeeService.getEmployees(),
           requests: this.timeOffRequestService.getRequests(),
           candidates: this.candidateService.getCandidates(),
+          enrollments: this.enrollmentService.getEnrollments(),
+          courses: this.courseService.getCourses(),
         }),
       ),
     ),
@@ -257,11 +264,21 @@ export class DashboardComponent {
   private readonly employees = computed(() => this.data()?.employees ?? []);
   private readonly requests = computed(() => this.data()?.requests ?? []);
   private readonly candidates = computed(() => this.data()?.candidates ?? []);
+  private readonly enrollments = computed(() => this.data()?.enrollments ?? []);
+  private readonly courses = computed(() => this.data()?.courses ?? []);
 
   availableCount = computed(() => this.employees().filter((e) => e.isAvailable).length);
 
   /** Everything waiting on this user, time off and hiring together. */
-  queue = computed(() => buildDecisionQueue(this.requests(), this.candidates(), this.employees()));
+  queue = computed(() =>
+    buildDecisionQueue(
+      this.requests(),
+      this.candidates(),
+      this.employees(),
+      this.enrollments(),
+      this.courses(),
+    ),
+  );
 
   private readonly counts = computed(() => countByKind(this.queue()));
 
@@ -271,6 +288,7 @@ export class DashboardComponent {
       { kind: 'all' as QueueKind, label: 'All', count: counts.all },
       { kind: 'timeoff' as QueueKind, label: 'Time off', count: counts.timeoff },
       { kind: 'hiring' as QueueKind, label: 'Hiring', count: counts.hiring },
+      { kind: 'training' as QueueKind, label: 'Training', count: counts.training },
     ];
   });
 

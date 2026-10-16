@@ -36,6 +36,9 @@ p { margin: 0; }
 
 img { max-width: 100%; }
 
+/* Fieldsets default to min-content width, which overflows narrow screens. */
+fieldset { min-inline-size: 0; }
+
 .muted { color: var(--acme-color-text-muted); }
 .subtle { color: var(--acme-color-text-subtle); }
 .small { font-size: var(--acme-text-sm); }
@@ -64,6 +67,8 @@ img { max-width: 100%; }
 /* ---------- Page structure ---------- */
 .page {
   display: grid;
+  /* minmax(0, …) so wide content can't stretch the page past the viewport. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--acme-space-6);
   align-content: start;
   padding: var(--acme-space-10) var(--acme-space-12);

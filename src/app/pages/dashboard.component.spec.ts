@@ -6,10 +6,13 @@ import { DashboardComponent } from './dashboard.component';
 import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
+import { CourseService } from '../services/course.service';
+import { EnrollmentService } from '../services/enrollment.service';
 import { AuthService } from '../services/auth.service';
 import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { Candidate } from '../infrastructure/types/candidate';
+import { Course, Enrollment } from '../infrastructure/types/course';
 import { daysFromToday } from '../demo/demo-data';
 
 describe('DashboardComponent', () => {
@@ -36,6 +39,20 @@ describe('DashboardComponent', () => {
     candidate(5, 'Approved', { offerAccepted: true, employeeId: 9 }),
   ];
 
+  const enrollment = (id: number, status: Enrollment['status'], dueDate?: string): Enrollment => ({
+    id, courseId: 1, employeeId: 1, assignedAt: '', completedModules: 0, status, progress: 0, ...(dueDate ? { dueDate } : {}),
+  });
+  const enrollments = [
+    enrollment(1, 'Completed', daysFromToday(-5)),
+    enrollment(2, 'In progress', daysFromToday(-1)),
+    enrollment(3, 'Not started', daysFromToday(5)),
+    enrollment(4, 'Completed'),
+  ];
+
+  const courses: Course[] = [
+    { id: 1, title: 'Security', category: 'Compliance', format: 'Video', durationHours: 1, description: '', mandatory: true, modules: ['a', 'b'] },
+  ];
+
   const text = () => fixture.nativeElement.textContent as string;
 
   beforeEach(async () => {
@@ -52,6 +69,9 @@ describe('DashboardComponent', () => {
         { provide: EmployeeService, useValue: { getEmployees: () => of(employees) } },
         { provide: TimeOffRequestService, useValue: mockTimeOffRequestService },
         { provide: CandidateService, useValue: { getCandidates: () => of(candidates) } },
+        { provide: EnrollmentService, useValue: { getEnrollments: () => of(enrollments) } },
+        { provide: CourseService, useValue: { getCourses: () => of(courses) } },
+        { provide: EnrollmentService, useValue: { getEnrollments: () => of(enrollments) } },
         { provide: AuthService, useValue: { currentUser: signal({ name: 'Alex Morgan', email: '', role: '' }) } },
       ],
     }).compileComponents();
@@ -66,7 +86,8 @@ describe('DashboardComponent', () => {
 
   it('should list what needs a decision, with its cover impact', () => {
     const rows = fixture.nativeElement.querySelectorAll('.row-item');
-    expect(rows.length).toBe(1);
+    // One pending request plus one overdue course.
+    expect(rows.length).toBe(2);
     expect(rows[0].textContent).toContain('First1 Last1');
     expect(rows[0].textContent).toContain('Vacation');
     // The only other Developer is out on different days, so nothing collides.
@@ -79,10 +100,18 @@ describe('DashboardComponent', () => {
     expect(badge.classList).toContain('badge-critical');
   });
 
+  it('should put overdue training in the queue', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.row-item') as NodeListOf<HTMLElement>);
+    const training = rows.find((row) => row.textContent!.includes('Training overdue'))!;
+    expect(training).toBeTruthy();
+    expect(training.textContent).toContain('Security');
+    expect(training.querySelector('.badge')!.textContent).toContain('Overdue');
+  });
+
   it('should split the queue by kind', () => {
     const chips = Array.from(fixture.nativeElement.querySelectorAll('.chips .chip') as NodeListOf<HTMLElement>)
       .map((c) => c.textContent!.replace(/\s+/g, ' ').trim());
-    expect(chips).toEqual(['All 1', 'Time off 1', 'Hiring 0']);
+    expect(chips).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1']);
   });
 
   it('should show who is out next week, marking what is still pending', () => {

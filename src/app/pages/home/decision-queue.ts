@@ -1,5 +1,7 @@
 import { Candidate } from 'src/app/infrastructure/types/candidate';
+import { Course, Enrollment } from 'src/app/infrastructure/types/course';
 import { Employee } from 'src/app/infrastructure/types/employee';
+import { isOverdue } from 'src/app/pages/learning/learning';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
 import {
   DAY_MS,
@@ -10,12 +12,12 @@ import {
   parseDay,
 } from 'src/app/shared/functions/absence';
 
-export type QueueKind = 'all' | 'timeoff' | 'hiring';
+export type QueueKind = 'all' | 'timeoff' | 'hiring' | 'training';
 
 /** One thing waiting on the signed-in user, from either side of the app. */
 export type QueueItem = {
   id: string;
-  kind: 'timeoff' | 'hiring';
+  kind: 'timeoff' | 'hiring' | 'training';
   name: string;
   what: string;
   note: string;
@@ -127,6 +129,33 @@ function hiringItems(candidates: Candidate[], employees: Employee[], today: Date
   return items;
 }
 
+/** Training past its due date: someone has to chase it. */
+function trainingItems(
+  enrollments: Enrollment[],
+  courses: Course[],
+  employees: Employee[],
+): QueueItem[] {
+  const names = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]));
+  const titles = new Map(courses.map((c) => [c.id, c.title]));
+
+  return enrollments
+    .filter((enrollment) => isOverdue(enrollment))
+    .map((enrollment) => ({
+      id: `training-${enrollment.id}`,
+      kind: 'training' as const,
+      name: names.get(enrollment.employeeId) ?? `Employee #${enrollment.employeeId}`,
+      what: 'Training overdue',
+      note: `${titles.get(enrollment.courseId) ?? `Course #${enrollment.courseId}`}${
+        enrollment.dueDate ? `, due ${formatRange(enrollment.dueDate, enrollment.dueDate)}` : ''
+      }. ${enrollment.progress}% done.`,
+      tag: 'Overdue',
+      urgent: true,
+      primary: 'Open',
+      secondary: 'View course',
+      link: ['/learning/courses', enrollment.courseId],
+    }));
+}
+
 /**
  * The Home queue: pending time off first (it has a deadline), then hiring
  * steps that are blocking someone else. Urgent items float to the top of
@@ -136,19 +165,25 @@ export function buildDecisionQueue(
   requests: TimeOffRequest[],
   candidates: Candidate[],
   employees: Employee[],
+  enrollments: Enrollment[] = [],
+  courses: Course[] = [],
   today = new Date(),
 ): QueueItem[] {
   const items = [
     ...timeOffItems(requests, employees, today),
     ...hiringItems(candidates, employees, today),
+    ...trainingItems(enrollments, courses, employees),
   ];
   return items.sort((a, b) => Number(b.urgent) - Number(a.urgent));
 }
 
-export function countByKind(items: QueueItem[]): { all: number; timeoff: number; hiring: number } {
+export function countByKind(
+  items: QueueItem[],
+): { all: number; timeoff: number; hiring: number; training: number } {
   return {
     all: items.length,
     timeoff: items.filter((item) => item.kind === 'timeoff').length,
     hiring: items.filter((item) => item.kind === 'hiring').length,
+    training: items.filter((item) => item.kind === 'training').length,
   };
 }
