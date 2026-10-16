@@ -1,68 +1,104 @@
+/* Shared styles for the hiring stage panels rendered inside the candidate
+   page. Each stage is one card's worth of controls plus its actions. */
 .stage {
   display: grid;
-  gap: 1rem;
+  gap: var(--acme-space-4);
 }
 
 fieldset {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--acme-space-2);
   margin: 0;
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  padding: var(--acme-space-4);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-md);
 }
 
 legend {
-  padding: 0 0.35rem;
-  font-size: 0.88rem;
+  padding: 0 var(--acme-space-1);
+  font-size: var(--acme-text-sm);
   font-weight: 600;
 }
 
 .check {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: var(--acme-space-2);
+  font-size: var(--acme-text-sm);
 }
 
 .check input {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  flex: none;
 }
 
 .stage-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.5rem;
+  align-items: center;
+  gap: var(--acme-space-2);
 }
 
+/* 1-5 scale: one option per column, the chosen one outlined in Cobalt. */
 .rating {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--acme-space-2);
 }
 
 .rating label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.65rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  min-height: var(--app-control-h);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-md);
+  background: var(--acme-color-surface-raised);
+  font-size: var(--acme-text-sm);
+  font-weight: 600;
   cursor: pointer;
+  transition: border-color var(--acme-duration-base) var(--acme-ease-out);
 }
 
+.rating label:hover { border-color: var(--acme-color-text-subtle); }
+
 .rating label:has(input:checked) {
-  border-color: var(--brand);
-  background: var(--brand-soft);
+  border: 2px solid var(--acme-color-selected);
+  background: var(--acme-color-selected-soft);
+  color: var(--acme-color-selected);
+}
+
+/* The radio itself is redundant once the label is a button-sized target. */
+.rating label input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.rating-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--acme-text-xs);
+  color: var(--acme-color-text-subtle);
 }
 
 .letter {
   margin: 0;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  padding: var(--acme-space-4) var(--acme-space-5);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-md);
+  background: var(--acme-color-surface);
   font: inherit;
+  font-size: var(--acme-text-sm);
+  line-height: var(--acme-leading-relaxed);
   white-space: pre-wrap;
+}
+
+/* The input is visually hidden, so the label carries its focus ring. */
+.rating label:has(input:focus-visible) {
+  outline: 2px solid var(--acme-color-focus);
+  outline-offset: 2px;
 }

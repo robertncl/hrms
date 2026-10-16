@@ -1,26 +1,26 @@
 import { AsyncPipe } from '@angular/common';
 import { Component } from '@angular/core';
-import { isAuth } from '../functions/is-auth';
 import { RouterLink } from '@angular/router';
+import { isAuth } from '../functions/is-auth';
 
+/**
+ * One quiet line at the end of the page.
+ *
+ * The ACME People screens show no footer, but the legal pages are only
+ * reachable from here, so this keeps a hairline-separated row of links rather
+ * than orphaning those routes. The old social links are gone: they are off
+ * voice for ACME and led nowhere useful.
+ */
 @Component({
   selector: 'app-footer',
   template: `
     <footer>
-      <div class="about">
-        <h2>HRMS</h2>
-        <p>Welcome to HRMS platform!</p>
-      </div>
-      <div class="links">
-        Follow us on social media:
-        <a href="https://linkedin.com" target="_blank" rel="noopener">Linkedin</a>
-        <a href="https://x.com" target="_blank" rel="noopener">X (former Twitter)</a>
-      </div>
+      <span class="copyright">&copy; ACME Corp. Since 1949, and still not liable for the anvils.</span>
       @if (isAuth$ | async) {
         <div class="legal">
-          <a routerLink="/terms">Terms of Service</a>
-          <a routerLink="/privacy">Privacy Policy</a>
-          <a routerLink="/cookies">Cookies Policy</a>
+          <a routerLink="/terms">Terms of service</a>
+          <a routerLink="/privacy">Privacy policy</a>
+          <a routerLink="/cookies">Cookies policy</a>
         </div>
       }
     </footer>
@@ -31,22 +31,22 @@ import { RouterLink } from '@angular/router';
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 0.75rem 1.5rem;
-      padding: 1.25rem 1.5rem;
-      border-top: 1px solid var(--border);
-      color: var(--text-secondary);
-      font-size: 0.85rem;
+      gap: var(--acme-space-2) var(--acme-space-6);
+      padding: var(--acme-space-4) var(--acme-space-12);
+      border-top: 1px solid var(--app-hairline);
+      color: var(--acme-color-text-subtle);
+      font-size: var(--acme-text-xs);
     }
-    .about {
-      display: flex;
-      align-items: baseline;
-      gap: 0.6rem;
-    }
-    h2 { font-size: 0.95rem; color: var(--text); }
-    .links, .legal {
+    .legal {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.4rem 0.9rem;
+      gap: var(--acme-space-1) var(--acme-space-4);
+    }
+    .legal a { color: inherit; text-decoration: none; }
+    .legal a:hover { color: var(--acme-color-link); text-decoration: underline; }
+
+    @media (max-width: 860px) {
+      footer { padding-inline: var(--acme-space-5); }
     }
   `,
   standalone: true,

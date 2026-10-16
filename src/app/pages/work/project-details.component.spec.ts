@@ -5,9 +5,12 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { ProjectDetailsComponent } from './project-details.component';
 import { ProjectService } from 'src/app/services/project.service';
-import { Project } from 'src/app/infrastructure/types/project';
-import { imageLoader } from 'src/app/app.config';
 import { EmployeeService } from 'src/app/services/employee.service';
+import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
+import { Project } from 'src/app/infrastructure/types/project';
+import { Employee } from 'src/app/infrastructure/types/employee';
+import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
+import { imageLoader } from 'src/app/app.config';
 
 describe('ProjectDetailsComponent', () => {
   let component: ProjectDetailsComponent;
@@ -22,29 +25,36 @@ describe('ProjectDetailsComponent', () => {
     subProjectIds: [2, 3],
   };
 
-  const mockProjectService = {
-    getProject: jasmine.createSpy('getProject').and.returnValue(of(mockProject)),
-    getProjects: jasmine.createSpy('getProjects').and.returnValue(of([mockProject])),
-  };
+  const subProjects: Project[] = [
+    { id: 2, name: 'Sub Two', description: '', image: '', employees: [1], subProjectIds: [] },
+    { id: 3, name: 'Sub Three', description: '', image: '', employees: [], subProjectIds: [] },
+  ];
+
+  const employees: Employee[] = [
+    { id: 1, firstName: 'Ada', lastName: 'Lovelace', email: 'a@acme.com', position: 'Developer', level: 'Lead', isAvailable: true, profilePicture: '' },
+    { id: 2, firstName: 'Alan', lastName: 'Turing', email: 't@acme.com', position: 'Developer', level: 'Senior', isAvailable: false, profilePicture: '' },
+    { id: 9, firstName: 'Not', lastName: 'Member', email: 'n@acme.com', position: 'QA', level: 'Junior', isAvailable: true, profilePicture: '' },
+  ];
+
+  // Alan is signed off across today, so the cover warning can name a return date.
+  const requests: TimeOffRequest[] = [
+    { id: 1, employeeId: 2, startDate: '2000-01-01', endDate: '2099-12-31', type: 'Vacation', status: 'Approved' },
+  ];
+
+  let mockProjectService: { getProjects: jasmine.Spy };
 
   beforeEach(async () => {
-    mockProjectService.getProject.calls.reset();
-    mockProjectService.getProject.and.returnValue(of(mockProject));
+    mockProjectService = {
+      getProjects: jasmine.createSpy('getProjects').and.returnValue(of([mockProject, ...subProjects])),
+    };
 
     await TestBed.configureTestingModule({
       imports: [ProjectDetailsComponent, NoopAnimationsModule],
       providers: [
         provideRouter([]),
-        {
-          provide: EmployeeService,
-          useValue: {
-            getEmployees: () => of([
-              { id: 1, firstName: 'Ada', lastName: 'Lovelace', email: '', position: 'Developer', level: 'Lead', isAvailable: true, profilePicture: '' },
-              { id: 9, firstName: 'Not', lastName: 'Member', email: '', position: 'QA', level: 'Junior', isAvailable: true, profilePicture: '' },
-            ]),
-          },
-        },
         { provide: ProjectService, useValue: mockProjectService },
+        { provide: EmployeeService, useValue: { getEmployees: () => of(employees) } },
+        { provide: TimeOffRequestService, useValue: { getRequests: () => of(requests) } },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],
     }).compileComponents();
@@ -54,33 +64,28 @@ describe('ProjectDetailsComponent', () => {
   });
 
   it('should create', () => {
-    component.id = 1;
+    fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
     expect(component).toBeTruthy();
   });
 
-  it('should fetch the project via ProjectService when id input changes', () => {
+  it('should load projects when the id input changes', () => {
     component.id = 1;
     component.ngOnChanges({
-      id: {
-        currentValue: 1,
-        previousValue: undefined,
-        firstChange: true,
-        isFirstChange: () => true,
-      },
+      id: { currentValue: 1, previousValue: undefined, firstChange: true, isFirstChange: () => true },
     });
 
-    expect(mockProjectService.getProject).toHaveBeenCalledWith(1);
+    expect(mockProjectService.getProjects).toHaveBeenCalled();
   });
 
-  it('should not fetch the project if the id input did not change', () => {
+  it('should not load anything if the id input did not change', () => {
     component.id = 1;
     component.ngOnChanges({});
 
-    expect(mockProjectService.getProject).not.toHaveBeenCalled();
+    expect(mockProjectService.getProjects).not.toHaveBeenCalled();
   });
 
-  it('should render project details once resolved', () => {
+  it('should render the project hero once resolved', () => {
     fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
@@ -95,25 +100,37 @@ describe('ProjectDetailsComponent', () => {
     fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
-    const members = fixture.debugElement.nativeElement.querySelectorAll('.team li');
-    expect(members.length).toBe(1);
+    const members = fixture.debugElement.nativeElement.querySelectorAll('.member');
+    expect(members.length).toBe(2);
     expect(members[0].textContent).toContain('Ada Lovelace');
+    expect(members[1].textContent).toContain('Alan Turing');
   });
 
-  it('should render a project card for each subproject', () => {
+  it('should warn how many of the team are away, and name them', () => {
     fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
-    const cards = fixture.debugElement.nativeElement.querySelectorAll('app-project-card');
-    expect(cards.length).toBe(2);
+    const callout = fixture.debugElement.nativeElement.querySelector('.callout-danger');
+    expect(callout.textContent).toContain('1 of 2 away right now');
+    expect(callout.textContent).toContain('Alan');
   });
 
-  it('should render no subproject cards when subProjectIds is empty', () => {
-    mockProjectService.getProject.and.returnValue(of({ ...mockProject, subProjectIds: [] }));
+  it('should list each sub-project by name', () => {
     fixture.componentRef.setInput('id', 1);
     fixture.detectChanges();
 
-    const cards = fixture.debugElement.nativeElement.querySelectorAll('app-project-card');
-    expect(cards.length).toBe(0);
+    const items = fixture.debugElement.nativeElement.querySelectorAll('.sub-list li');
+    expect(items.length).toBe(2);
+    expect(items[0].textContent).toContain('Sub Two');
+    expect(items[1].textContent).toContain('Sub Three');
+  });
+
+  it('should say so when a project has no sub-projects', () => {
+    mockProjectService.getProjects.and.returnValue(of([{ ...mockProject, subProjectIds: [] }]));
+    fixture.componentRef.setInput('id', 1);
+    fixture.detectChanges();
+
+    expect(fixture.debugElement.nativeElement.querySelectorAll('.sub-list li').length).toBe(0);
+    expect(fixture.debugElement.nativeElement.textContent).toContain('None yet');
   });
 });

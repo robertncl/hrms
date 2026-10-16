@@ -6,46 +6,60 @@ import { Employee } from 'src/app/infrastructure/types/employee';
 import { EmployeeForm } from 'src/app/infrastructure/types/employee-form';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
-import { IconComponent } from 'src/app/shared/components/icon.component';
 import { EmployeeFormFieldsComponent } from './employee-form-fields.component';
 
 @Component({
   selector: 'app-edit-employee',
   template: `
-    <div class="page narrow">
-      <div>
-        <a class="back-link" [routerLink]="['/employees/details', employee.id]">
-          <app-icon name="arrow-left" [size]="16" /> {{ employee.firstName }} {{ employee.lastName }}
-        </a>
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="page">
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+          <a routerLink="/employees">People</a>
+          <span aria-hidden="true">/</span>
+          <a [routerLink]="['/employees/details', employee.id]">
+            {{ employee.firstName }} {{ employee.lastName }}
+          </a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">Edit</span>
+        </nav>
+
         <div class="page-header">
-          <h1>Edit employee</h1>
+          <div>
+            <h1>Edit {{ employee.firstName }} {{ employee.lastName }}</h1>
+            <p>Changes show up across ACME as soon as you save.</p>
+          </div>
         </div>
-      </div>
-      <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+
         @if (!canEditPrivateDetails()) {
           <p class="alert alert-info">
-            Name and email are private details. Your role can view them but not change them.
+            Name and email are private details. Your role can see them but not change them.
           </p>
         }
+
         <app-employee-form-fields [form]="form" />
+
         @if (error()) {
           <p class="alert alert-error" role="alert">{{ error() }}</p>
         }
-        <div class="form-actions">
-          <a class="btn" [routerLink]="['/employees/details', employee.id]">Cancel</a>
-          <button class="btn btn-primary" type="submit" [disabled]="saving()">
-            {{ saving() ? 'Saving…' : 'Save changes' }}
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+
+      <div class="form-bar">
+        <a class="btn btn-ghost" [routerLink]="['/employees/details', employee.id]">Cancel</a>
+        <button class="btn btn-primary" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save changes' }}
+        </button>
+      </div>
+    </form>
   `,
   styles: `
-    .narrow { max-width: 720px; }
-    .alert { margin-bottom: 1rem; }
+    /* Fill the routed outlet so the sticky save bar lands at the bottom
+       of the viewport even when the form is short. */
+    :host { display: flex; flex-direction: column; min-height: 100%; }
+    form { display: flex; flex-direction: column; flex: 1; }
+    .page { flex: 1; }
   `,
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, IconComponent, EmployeeFormFieldsComponent],
+  imports: [ReactiveFormsModule, RouterLink, EmployeeFormFieldsComponent],
 })
 export class EditEmployeeComponent implements OnInit {
   permissionsService = inject(PermissionsService);
@@ -53,15 +67,14 @@ export class EditEmployeeComponent implements OnInit {
   private readonly router = inject(Router);
   destroyRef = inject(DestroyRef);
   route = inject(ActivatedRoute);
+
   employee!: Employee;
   canEditPrivateDetails = signal(true);
   saving = signal(false);
   error = signal('');
+
   form = new FormGroup<EmployeeForm>({
-    firstName: new FormControl('', {
-      nonNullable: true,
-      validators: [Validators.required],
-    }),
+    firstName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     lastName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     email: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] }),
     position: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
@@ -99,7 +112,7 @@ export class EditEmployeeComponent implements OnInit {
       next: () => this.router.navigate(['/employees/details', this.employee.id]),
       error: () => {
         this.saving.set(false);
-        this.error.set('Your changes could not be saved. Please try again.');
+        this.error.set("Those changes didn't save. Try again.");
       },
     });
   }

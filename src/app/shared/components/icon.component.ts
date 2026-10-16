@@ -13,7 +13,11 @@ export type IconName =
   | 'plus'
   | 'arrow-left'
   | 'check'
-  | 'book';
+  | 'book'
+  | 'x'
+  | 'edit'
+  | 'more-horizontal'
+  | 'chevron-down';
 
 /** Small stroke icons (Feather-style), decorative unless given a label. */
 @Component({
@@ -79,6 +83,22 @@ export type IconName =
         @case ('book') {
           <svg:path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
           <svg:path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+        }
+        @case ('x') {
+          <svg:path d="M18 6 6 18" />
+          <svg:path d="m6 6 12 12" />
+        }
+        @case ('edit') {
+          <svg:path d="M12 20h9" />
+          <svg:path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        }
+        @case ('more-horizontal') {
+          <svg:circle cx="12" cy="12" r="1" />
+          <svg:circle cx="19" cy="12" r="1" />
+          <svg:circle cx="5" cy="12" r="1" />
+        }
+        @case ('chevron-down') {
+          <svg:polyline points="6 9 12 15 18 9" />
         }
       }
     </svg>

@@ -6,18 +6,21 @@ import { BehaviorSubject, forkJoin, switchMap } from 'rxjs';
 import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
+import { CourseService } from '../services/course.service';
 import { EnrollmentService } from '../services/enrollment.service';
 import { completionRate, isOverdue } from './learning/learning';
 import { AuthService } from '../services/auth.service';
 import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { AvatarComponent } from '../shared/components/avatar.component';
-import { BarListComponent, BarListItem } from '../shared/components/bar-list.component';
 import { candidateStage } from '../shared/functions/status-badge';
-import { daysFromToday } from '../demo/demo-data';
+import { QueueKind, buildDecisionQueue, countByKind } from './home/decision-queue';
+import { WeekBar, nextWeekBars, nextWeekDays, nextWeekRange } from './home/week-strip';
 
 const POSITIONS: Employee['position'][] = ['Developer', 'Designer', 'QA', 'Manager'];
 const PIPELINE_STAGES = ['CV evaluation', 'Interview preparation', 'Interview Feedback', 'Offer sent', 'Onboarding'];
+const PIPELINE_LABELS = ['New', 'Interview', 'Feedback', 'Offer', 'Onboarding'];
+const VISIBLE_QUEUE = 6;
 
 @Component({
   selector: 'app-dashboard',
@@ -25,174 +28,217 @@ const PIPELINE_STAGES = ['CV evaluation', 'Interview preparation', 'Interview Fe
     <div class="page">
       <div class="page-header">
         <div>
+          <div class="kicker">{{ today | date: 'EEEE, d MMMM' }}</div>
           <h1>{{ greeting() }}</h1>
-          <p>{{ today | date: 'fullDate' }}</p>
+          <p>{{ summary() }}</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn" routerLink="/work/time-off">Request time off</a>
+          <a class="btn btn-primary" routerLink="/employees/create">Add person</a>
         </div>
       </div>
 
       @if (data(); as data) {
-        <section class="stats" aria-label="Key figures">
-          <a class="card stat" routerLink="/employees">
-            <span class="stat-label">Headcount</span>
-            <span class="stat-value">{{ data.employees.length }}</span>
-            <span class="stat-note">{{ availableCount() }} available today</span>
-          </a>
-          <a class="card stat" routerLink="/work/time-off">
-            <span class="stat-label">Away today</span>
-            <span class="stat-value">{{ data.employees.length - availableCount() }}</span>
-            <span class="stat-note">On approved time off</span>
-          </a>
-          <a class="card stat" routerLink="/work/time-off">
-            <span class="stat-label">Pending requests</span>
-            <span class="stat-value">{{ pendingRequests().length }}</span>
-            <span class="stat-note">Waiting for approval</span>
-          </a>
-          <a class="card stat" routerLink="/recruitment">
-            <span class="stat-label">Active candidates</span>
-            <span class="stat-value">{{ activeCandidates() }}</span>
-            <span class="stat-note">In the hiring pipeline</span>
-          </a>
-          <a class="card stat" routerLink="/learning">
-            <span class="stat-label">Overdue training</span>
-            <span class="stat-value">{{ overdueTraining() }}</span>
-            <span class="stat-note">{{ trainingRate() }}% of training complete</span>
-          </a>
-        </section>
-
-        <div class="panels">
-          <section class="card">
+        <div class="split">
+          <section class="card flush" aria-labelledby="queue-title">
             <div class="card-header">
-              <h2>Pending time off</h2>
-              <a routerLink="/work/time-off" class="small">View all</a>
+              <h2 id="queue-title">Needs your decision</h2>
+              <div class="chips">
+                @for (tab of tabs(); track tab.kind) {
+                  <button class="chip" type="button" [attr.aria-pressed]="kind() === tab.kind"
+                    (click)="kind.set(tab.kind)">{{ tab.label }} {{ tab.count }}</button>
+                }
+              </div>
             </div>
-            @if (pendingRequests().length) {
-              <ul class="list">
-                @for (request of pendingRequests().slice(0, 5); track request.id) {
-                  <li>
-                    <app-avatar [name]="employeeName(request.employeeId)" size="2rem" />
-                    <div class="grow">
-                      <strong>{{ employeeName(request.employeeId) }}</strong>
-                      <span class="muted small">
-                        {{ request.type }} · {{ request.startDate | date: 'MMM d' }}
-                        @if (request.endDate !== request.startDate) { – {{ request.endDate | date: 'MMM d' }} }
-                      </span>
+
+            @if (visibleQueue().length) {
+              <div class="rows">
+                @for (item of visibleQueue(); track item.id) {
+                  <div class="row-item">
+                    <app-avatar [name]="item.name" size="2.25rem" />
+                    <div class="row-body">
+                      <div class="row-title">
+                        <strong>{{ item.name }}</strong>
+                        <span class="what">{{ item.what }}</span>
+                        @if (item.tag) {
+                          <span class="badge" [class.badge-critical]="item.urgent">{{ item.tag }}</span>
+                        }
+                      </div>
+                      <span class="row-note">{{ item.note }}</span>
                     </div>
                     <div class="row-actions">
-                      <button class="btn btn-sm" [disabled]="busy()" (click)="resolve(request, 'Approved')">Approve</button>
-                      <button class="btn btn-sm btn-ghost" [disabled]="busy()" (click)="resolve(request, 'Rejected')">Reject</button>
+                      <a class="btn btn-sm btn-ghost" [routerLink]="item.link">{{ item.secondary }}</a>
+                      @if (item.request) {
+                        <button class="btn btn-sm" type="button" [disabled]="busy()"
+                          (click)="approve(item.request)">Approve</button>
+                      } @else {
+                        <a class="btn btn-sm" [routerLink]="item.link">{{ item.primary }}</a>
+                      }
                     </div>
-                  </li>
+                  </div>
                 }
-              </ul>
+              </div>
+              @if (hiddenCount()) {
+                <div class="rows-footer">
+                  <button class="link-btn" type="button" (click)="showAll.set(true)">
+                    Show {{ hiddenCount() }} more
+                  </button>
+                </div>
+              }
             } @else {
-              <p class="empty-state">No requests waiting. Nice work!</p>
+              <p class="empty-state">Nothing waiting on you. Enjoy it while it lasts.</p>
             }
           </section>
 
-          <section class="card">
-            <div class="card-header">
-              <h2>Who's out</h2>
-              <span class="muted small">Next 14 days</span>
-            </div>
-            @if (upcomingAbsences().length) {
-              <ul class="list">
-                @for (request of upcomingAbsences(); track request.id) {
+          <div class="stack">
+            <section class="card" aria-labelledby="week-title">
+              <div class="card-header">
+                <h2 id="week-title">Who's out next week</h2>
+                <span class="small muted">{{ weekRange() }}</span>
+              </div>
+              @if (weekBars().length) {
+                <div class="timeline week">
+                  <span></span>
+                  @for (day of weekDays; track day) {
+                    <span class="t-head centred">{{ day }}</span>
+                  }
+                  @for (bar of weekBars(); track bar.id) {
+                    <span class="t-name">{{ bar.name }}</span>
+                    <span class="t-bar" [class.is-pending]="bar.pending"
+                      [style.grid-column]="bar.column">{{ bar.label }}</span>
+                  }
+                </div>
+                <div class="legend">
+                  <span><span class="swatch"></span>Approved</span>
+                  <span><span class="swatch is-pending"></span>Waiting on you</span>
+                </div>
+              } @else {
+                <p class="empty-state">Everyone is in next week.</p>
+              }
+            </section>
+
+            <section class="card" aria-labelledby="team-title">
+              <div class="card-header">
+                <h2 id="team-title">Team</h2>
+                <a class="small" routerLink="/employees">All people</a>
+              </div>
+              <p class="headcount">
+                <strong>{{ data.employees.length }}</strong>
+                <span class="small muted">people · {{ availableCount() }} in today</span>
+              </p>
+              <div class="bars">
+                @for (row of headcount(); track row.label) {
+                  <a class="b-label" routerLink="/employees" [queryParams]="{ position: row.label }">{{ row.label }}</a>
+                  <span class="meter">
+                    <span [class.is-highlight]="row.highlight" [style.width.%]="row.percent"></span>
+                  </span>
+                  <span class="b-value num">{{ row.value }}</span>
+                }
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="pipeline-title">
+              <div class="card-header">
+                <h2 id="pipeline-title">Hiring</h2>
+                <a class="small" routerLink="/recruitment">Open board</a>
+              </div>
+              <ol class="pipeline">
+                @for (stage of pipeline(); track stage.label) {
                   <li>
-                    <app-avatar [name]="employeeName(request.employeeId)" size="2rem" />
-                    <div class="grow">
-                      <a [routerLink]="['/employees/details', request.employeeId]">{{ employeeName(request.employeeId) }}</a>
-                      <span class="muted small">{{ request.type }}</span>
-                    </div>
-                    <span class="small num">
-                      {{ request.startDate | date: 'MMM d' }} – {{ request.endDate | date: 'MMM d' }}
-                    </span>
+                    <strong>{{ stage.value }}</strong>
+                    <span>{{ stage.label }}</span>
                   </li>
                 }
-              </ul>
-            } @else {
-              <p class="empty-state">Everyone is in for the next two weeks.</p>
-            }
-          </section>
-
-          <section class="card">
-            <div class="card-header">
-              <h2>Headcount by position</h2>
-              <span class="muted small">{{ data.employees.length }} people</span>
-            </div>
-            <app-bar-list [items]="headcountByPosition()" label="Headcount by position" />
-          </section>
-
-          <section class="card">
-            <div class="card-header">
-              <h2>Hiring pipeline</h2>
-              <span class="muted small">Candidates per stage</span>
-            </div>
-            <app-bar-list [items]="pipeline()" label="Candidates per hiring stage" />
-          </section>
+              </ol>
+            </section>
+          </div>
         </div>
       } @else {
-        <p class="loading">Loading dashboard…</p>
+        <p class="loading">Loading your day…</p>
       }
     </div>
   `,
   styles: `
-    .stats {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+    .page-header .kicker { margin-bottom: var(--acme-space-2); }
+
+    .link-btn {
+      border: 0;
+      padding: 0;
+      background: none;
+      color: var(--acme-color-link);
+      font: inherit;
+      cursor: pointer;
     }
-    .panels {
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-      align-items: start;
+    .link-btn:hover { text-decoration: underline; }
+
+    /* Mon-Fri strip: a name column plus one column per working day. */
+    .timeline.week { grid-template-columns: 110px repeat(5, minmax(0, 1fr)); column-gap: 4px; }
+
+    .headcount {
+      display: flex;
+      align-items: baseline;
+      gap: var(--acme-space-3);
+      margin-bottom: var(--acme-space-4);
     }
-    .stat {
+    .headcount strong { font: 700 var(--acme-text-4xl) / 1 var(--acme-font-display); }
+
+    .bars {
       display: grid;
-      gap: 0.15rem;
-      color: inherit;
-      text-decoration: none;
+      grid-template-columns: 80px minmax(0, 1fr) 24px;
+      gap: var(--acme-space-2) var(--acme-space-3);
+      align-items: center;
+      font-size: var(--acme-text-sm);
     }
-    .stat:hover { border-color: var(--border-strong); }
-    .stat-label { font-size: 0.9rem; color: var(--text-secondary); }
-    .stat-value { font-size: 2rem; font-weight: 650; line-height: 1.2; }
-    .stat-note { font-size: 0.82rem; color: var(--text-muted); }
-    .list {
-      list-style: none;
+    .b-label { color: var(--acme-color-text-muted); text-decoration: none; }
+    .b-label:hover { color: var(--acme-color-link); text-decoration: underline; }
+    .b-value { font-weight: 600; text-align: right; }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       margin: 0;
       padding: 0;
+      list-style: none;
+      border: 1px solid var(--app-hairline);
+      border-radius: var(--acme-radius-md);
+      overflow: hidden;
+    }
+    .pipeline li {
       display: grid;
+      gap: 2px;
+      min-width: 0;
+      padding: var(--acme-space-2) var(--acme-space-1) var(--acme-space-3);
     }
-    .list li {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.6rem 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .list li:last-child { border-bottom: 0; }
-    .grow { flex: 1; display: grid; min-width: 0; }
-    .grow a { font-weight: 600; text-decoration: none; }
-    .row-actions { display: flex; gap: 0.25rem; }
-    .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-    @media (max-width: 480px) {
-      .list li { flex-wrap: wrap; }
-      .row-actions { width: 100%; justify-content: flex-end; }
+    .pipeline li + li { border-left: 1px solid var(--app-hairline); }
+    .pipeline strong { font: 700 var(--acme-text-2xl) / 1.1 var(--acme-font-display); }
+    /* Five stage names in one row is tight: shrink the label a step rather
+       than breaking "Onboarding" across lines. */
+    .pipeline span {
+      font-size: 10px;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      color: var(--acme-color-text-muted);
+      white-space: nowrap;
     }
   `,
-  imports: [DatePipe, RouterLink, AvatarComponent, BarListComponent],
+  imports: [DatePipe, RouterLink, AvatarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardComponent {
   private readonly employeeService = inject(EmployeeService);
   private readonly timeOffRequestService = inject(TimeOffRequestService);
   private readonly candidateService = inject(CandidateService);
+  private readonly courseService = inject(CourseService);
   private readonly enrollmentService = inject(EnrollmentService);
   private readonly user = inject(AuthService).currentUser;
 
   readonly today = new Date();
+  readonly weekDays = nextWeekDays();
   private readonly refresh$ = new BehaviorSubject<void>(undefined);
+
   busy = signal(false);
+  kind = signal<QueueKind>('all');
+  showAll = signal(false);
 
   data = toSignal(
     this.refresh$.pipe(
@@ -202,6 +248,7 @@ export class DashboardComponent {
           requests: this.timeOffRequestService.getRequests(),
           candidates: this.candidateService.getCandidates(),
           enrollments: this.enrollmentService.getEnrollments(),
+          courses: this.courseService.getCourses(),
         }),
       ),
     ),
@@ -211,67 +258,91 @@ export class DashboardComponent {
     const hour = this.today.getHours();
     const partOfDay = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     const firstName = this.user()?.name.split(' ')[0];
-    return firstName ? `${partOfDay}, ${firstName}` : partOfDay;
+    return firstName ? `${partOfDay}, ${firstName}.` : `${partOfDay}.`;
   });
 
-  private readonly employeesById = computed(
-    () => new Map((this.data()?.employees ?? []).map((e) => [e.id, e])),
+  private readonly employees = computed(() => this.data()?.employees ?? []);
+  private readonly requests = computed(() => this.data()?.requests ?? []);
+  private readonly candidates = computed(() => this.data()?.candidates ?? []);
+  private readonly enrollments = computed(() => this.data()?.enrollments ?? []);
+  private readonly courses = computed(() => this.data()?.courses ?? []);
+
+  availableCount = computed(() => this.employees().filter((e) => e.isAvailable).length);
+
+  /** Everything waiting on this user, time off and hiring together. */
+  queue = computed(() =>
+    buildDecisionQueue(
+      this.requests(),
+      this.candidates(),
+      this.employees(),
+      this.enrollments(),
+      this.courses(),
+    ),
   );
 
-  availableCount = computed(() => (this.data()?.employees ?? []).filter((e) => e.isAvailable).length);
+  private readonly counts = computed(() => countByKind(this.queue()));
 
-  pendingRequests = computed(() =>
-    (this.data()?.requests ?? [])
-      .filter((r) => r.status === 'Pending')
-      .sort((a, b) => a.startDate.localeCompare(b.startDate)),
-  );
-
-  upcomingAbsences = computed(() => {
-    const from = daysFromToday(0);
-    const to = daysFromToday(14);
-    return (this.data()?.requests ?? [])
-      .filter((r) => r.status === 'Approved' && r.endDate >= from && r.startDate <= to)
-      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  tabs = computed(() => {
+    const counts = this.counts();
+    return [
+      { kind: 'all' as QueueKind, label: 'All', count: counts.all },
+      { kind: 'timeoff' as QueueKind, label: 'Time off', count: counts.timeoff },
+      { kind: 'hiring' as QueueKind, label: 'Hiring', count: counts.hiring },
+      { kind: 'training' as QueueKind, label: 'Training', count: counts.training },
+    ];
   });
 
-  overdueTraining = computed(() => (this.data()?.enrollments ?? []).filter((e) => isOverdue(e)).length);
-  trainingRate = computed(() => completionRate(this.data()?.enrollments ?? []));
+  filteredQueue = computed(() => {
+    const kind = this.kind();
+    return kind === 'all' ? this.queue() : this.queue().filter((item) => item.kind === kind);
+  });
 
-  activeCandidates = computed(
-    () => (this.data()?.candidates ?? []).filter((c) => c.status !== 'Rejected' && !c.employeeId).length,
+  visibleQueue = computed(() =>
+    this.showAll() ? this.filteredQueue() : this.filteredQueue().slice(0, VISIBLE_QUEUE),
   );
 
-  headcountByPosition = computed<BarListItem[]>(() => {
-    const employees = this.data()?.employees ?? [];
-    return POSITIONS.map((position) => ({
+  hiddenCount = computed(() => this.filteredQueue().length - this.visibleQueue().length);
+
+  summary = computed(() => {
+    const total = this.counts().all;
+    if (!total) return 'Nothing needs you today.';
+    const urgent = this.queue().filter((item) => item.urgent).length;
+    const things = `${total} ${total === 1 ? 'thing needs' : 'things need'} you.`;
+    return urgent ? `${things} ${urgent} ${urgent === 1 ? "can't" : "can't"} wait.` : things;
+  });
+
+  weekRange = computed(() => nextWeekRange(this.today));
+
+  weekBars = computed<WeekBar[]>(() =>
+    nextWeekBars(this.requests(), this.employees(), this.today),
+  );
+
+  headcount = computed(() => {
+    const employees = this.employees();
+    const counts = POSITIONS.map((position) => ({
       label: position,
       value: employees.filter((e) => e.position === position).length,
-      link: '/employees',
-      query: { position },
+    }));
+    const max = Math.max(1, ...counts.map((c) => c.value));
+    // Cobalt marks one takeaway only: the largest group, and it is labelled.
+    return counts.map((c) => ({
+      ...c,
+      percent: (c.value / max) * 100,
+      highlight: c.value === max,
     }));
   });
 
-  pipeline = computed<BarListItem[]>(() => {
-    const candidates = this.data()?.candidates ?? [];
-    return PIPELINE_STAGES.map((stage) => ({
-      label: stage,
+  pipeline = computed(() => {
+    const candidates = this.candidates();
+    return PIPELINE_STAGES.map((stage, i) => ({
+      label: PIPELINE_LABELS[i],
       value: candidates.filter((c) => candidateStage(c) === stage).length,
-      link: '/recruitment',
-      query: { stage },
     }));
   });
 
-  employeeName(id: number) {
-    const employee = this.employeesById().get(id);
-    return employee ? `${employee.firstName} ${employee.lastName}` : `Employee #${id}`;
-  }
-
-  resolve(request: TimeOffRequest, status: 'Approved' | 'Rejected') {
+  approve(request: TimeOffRequest) {
     this.busy.set(true);
-    const action = status === 'Approved'
-      ? this.timeOffRequestService.approveRequest(request.id)
-      : this.timeOffRequestService.rejectRequest(request.id);
-    action.subscribe({
+    this.timeOffRequestService.approveRequest(request.id).subscribe({
       next: () => {
         this.busy.set(false);
         this.refresh$.next();

@@ -1,0 +1,579 @@
+/* ==========================================================================
+   ACME Corp Design Language — tokens + base  (v3.0.0)
+   Vendored from the "ACME Corp Design System" project
+   (_ds/acme-design-system-.../tokens/acme.css), light theme only.
+
+   Trimmed on purpose: the upstream slide (.acme-slide*) and report (.acme-doc*)
+   patterns are deck/long-form document styles and have no place in this app,
+   so sections 13-14 are left out. Everything else is verbatim.
+
+   Product code uses the semantic --acme-color-* aliases, never the raw ramps
+   and never a hex literal.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  /* Cobalt — the single highlight: primary action, links, selection, focus,
+     editorial marks, the wordmark mark, the chart takeaway. */
+  --acme-blue-50:  #EDF3FF;
+  --acme-blue-100: #D9E6FF;
+  --acme-blue-200: #B6CDFE;
+  --acme-blue-300: #86ACFA;
+  --acme-blue-400: #5387F0;
+  --acme-blue-500: #2F6BE4;
+  --acme-blue-600: #1F57C9;
+  --acme-blue-700: #1A47A6;
+  --acme-blue-800: #163A85;
+  --acme-blue-900: #112C64;
+
+  /* Slate — the blue-tinted neutral base. */
+  --acme-gray-0:   #FFFFFF;
+  --acme-gray-50:  #F5F8FC;
+  --acme-gray-100: #E9EFF7;
+  --acme-gray-200: #BAC7D8;
+  --acme-gray-300: #A0AFC3;
+  --acme-gray-400: #6E7E94;
+  --acme-gray-500: #526278;
+  --acme-gray-600: #44536A;
+  --acme-gray-700: #323F55;
+  --acme-gray-800: #212C3E;
+  --acme-gray-900: #111A2B;
+  --acme-gray-950: #0A111E;
+
+  /* Red — danger only. */
+  --acme-red-50:  #FDEEEE;
+  --acme-red-300: #F4A3A3;
+  --acme-red-500: #D63A3A;
+  --acme-red-600: #BF2A2A;
+  --acme-red-700: #A42222;
+  --acme-red-800: #871C1C;
+
+  /* Teal — info only. */
+  --acme-teal-50:  #E7F5F4;
+  --acme-teal-300: #7ACBC5;
+  --acme-teal-500: #1F8A84;
+  --acme-teal-600: #16716C;
+  --acme-teal-700: #105C58;
+  --acme-teal-800: #0C4845;
+
+  /* Typography — editorial serif display over a neutral grotesque body.
+     Styrene B and Tiempos Headline are commercial and ship no binaries, so
+     both fall back to their system stacks, same as upstream. JetBrains Mono
+     is not loaded either: this app's CSP restricts font-src to 'self'. */
+  --acme-font-sans: "Styrene B", "Inter", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --acme-font-display: "Tiempos Headline", "Copernicus", Georgia, "Times New Roman", ui-serif, serif;
+  --acme-font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --acme-text-xs: 0.75rem;
+  --acme-text-sm: 0.875rem;
+  --acme-text-md: 1rem;
+  --acme-text-lg: 1.125rem;
+  --acme-text-xl: 1.25rem;
+  --acme-text-2xl: 1.5rem;
+  --acme-text-3xl: 1.875rem;
+  --acme-text-4xl: 2.25rem;
+  --acme-text-5xl: 3rem;
+  --acme-leading-tight: 1.2;
+  --acme-leading-snug: 1.35;
+  --acme-leading-normal: 1.5;
+  --acme-leading-relaxed: 1.65;
+
+  /* Spacing — 4px grid */
+  --acme-space-1: 0.25rem;
+  --acme-space-2: 0.5rem;
+  --acme-space-3: 0.75rem;
+  --acme-space-4: 1rem;
+  --acme-space-5: 1.25rem;
+  --acme-space-6: 1.5rem;
+  --acme-space-8: 2rem;
+  --acme-space-10: 2.5rem;
+  --acme-space-12: 3rem;
+  --acme-space-16: 4rem;
+  --acme-space-20: 5rem;
+  --acme-space-24: 6rem;
+
+  /* Shape — restrained corporate radii; pills only for badges & switches */
+  --acme-radius-sm: 4px;
+  --acme-radius-md: 8px;
+  --acme-radius-lg: 12px;
+  --acme-radius-xl: 16px;
+  --acme-radius-full: 999px;
+
+  /* Elevation — quiet, structural, navy-tinted */
+  --acme-shadow-sm: 0 1px 2px rgb(17 26 43 / 0.06);
+  --acme-shadow-md: 0 2px 8px -2px rgb(17 26 43 / 0.10);
+  --acme-shadow-lg: 0 8px 24px -6px rgb(17 26 43 / 0.14);
+
+  /* Motion — calm and precise; nothing overshoots */
+  --acme-duration-fast: 100ms;
+  --acme-duration-base: 150ms;
+  --acme-duration-slow: 250ms;
+  --acme-duration-deliberate: 400ms;
+  --acme-ease-out: cubic-bezier(0.2, 0.8, 0.4, 1);
+  --acme-ease-in-out: cubic-bezier(0.45, 0, 0.25, 1);
+
+  /* Semantic aliases — light theme (the only theme). */
+  --acme-color-canvas: var(--acme-gray-50);
+  --acme-color-surface: var(--acme-gray-100);
+  --acme-color-surface-raised: var(--acme-gray-0);
+  --acme-color-border: var(--acme-gray-200);
+  --acme-color-border-strong: var(--acme-gray-400);
+  --acme-color-text: var(--acme-gray-900);
+  --acme-color-text-muted: var(--acme-gray-600);
+  --acme-color-text-subtle: var(--acme-gray-500);
+  --acme-color-primary: var(--acme-blue-600);
+  --acme-color-primary-hover: var(--acme-blue-700);
+  --acme-color-primary-active: var(--acme-blue-800);
+  --acme-color-on-primary: var(--acme-gray-0);
+  --acme-color-accent: var(--acme-blue-700);
+  --acme-color-accent-soft: var(--acme-blue-50);
+  --acme-color-selected: var(--acme-blue-700);
+  --acme-color-selected-soft: var(--acme-blue-50);
+  --acme-color-link: var(--acme-blue-700);
+  --acme-color-link-hover: var(--acme-blue-800);
+  --acme-color-focus: var(--acme-blue-600);
+  /* Success and warning share the slate ink — icon + label carry the meaning. */
+  --acme-color-success: var(--acme-gray-600);
+  --acme-color-success-soft: var(--acme-gray-100);
+  --acme-color-success-soft-text: var(--acme-gray-800);
+  --acme-color-warning: var(--acme-gray-600);
+  --acme-color-warning-soft: var(--acme-gray-100);
+  --acme-color-warning-soft-text: var(--acme-gray-800);
+  --acme-color-danger: var(--acme-red-700);
+  --acme-color-danger-emphasis: var(--acme-red-700);
+  --acme-color-danger-soft: var(--acme-red-50);
+  --acme-color-danger-soft-text: var(--acme-red-700);
+  --acme-color-info: var(--acme-teal-700);
+  --acme-color-info-soft: var(--acme-teal-50);
+  --acme-color-info-soft-text: var(--acme-teal-800);
+  /* Chart marks: slate bars carry the data, Cobalt marks the one takeaway. */
+  --acme-color-data: var(--acme-gray-400);
+  --acme-color-data-highlight: var(--acme-blue-600);
+
+  accent-color: var(--acme-color-selected);
+}
+
+/* --------------------------------------------------------------------------
+   2. Base
+   -------------------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--acme-font-sans);
+  font-size: var(--acme-text-md);
+  line-height: var(--acme-leading-normal);
+  color: var(--acme-color-text);
+  background: var(--acme-color-canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--acme-font-display);
+  line-height: var(--acme-leading-tight);
+  margin: 0 0 var(--acme-space-3);
+  font-weight: 700;
+}
+h1 { font-size: var(--acme-text-4xl); letter-spacing: -0.015em; }
+h2 { font-size: var(--acme-text-3xl); letter-spacing: -0.01em; }
+h3 { font-size: var(--acme-text-xl); }
+h4 { font-size: var(--acme-text-lg); }
+
+p { margin: 0 0 var(--acme-space-4); }
+
+a {
+  color: var(--acme-color-link);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color var(--acme-duration-fast) var(--acme-ease-out);
+}
+a:hover { color: var(--acme-color-link-hover); }
+
+code, pre {
+  font-family: var(--acme-font-mono);
+  font-size: 0.9em;
+}
+
+:is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--acme-color-focus);
+  outline-offset: 2px;
+  border-radius: var(--acme-radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. Wordmark
+   -------------------------------------------------------------------------- */
+.acme-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  font-family: var(--acme-font-sans);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--acme-color-text);
+  text-decoration: none;
+}
+.acme-wordmark__mark {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1.6em;
+  block-size: 1.6em;
+  border-radius: var(--acme-radius-sm);
+  background: var(--acme-color-primary);
+  color: var(--acme-color-on-primary);
+  font-style: italic;
+  letter-spacing: 0;
+}
+
+/* --------------------------------------------------------------------------
+   4. Buttons
+   -------------------------------------------------------------------------- */
+.acme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--acme-space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--acme-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--acme-radius-md);
+  font: 600 var(--acme-text-sm) / 1 var(--acme-font-sans);
+  color: var(--acme-color-text);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--acme-duration-base) var(--acme-ease-out),
+    border-color var(--acme-duration-base) var(--acme-ease-out),
+    color var(--acme-duration-base) var(--acme-ease-out),
+    box-shadow var(--acme-duration-base) var(--acme-ease-out);
+}
+.acme-btn--primary {
+  background: var(--acme-color-primary);
+  color: var(--acme-color-on-primary);
+}
+.acme-btn--primary:hover { background: var(--acme-color-primary-hover); }
+.acme-btn--primary:active { background: var(--acme-color-primary-active); }
+.acme-btn--secondary {
+  background: var(--acme-color-surface-raised);
+  border-color: var(--acme-color-border-strong);
+  box-shadow: var(--acme-shadow-sm);
+}
+.acme-btn--secondary:hover { background: var(--acme-color-surface); }
+.acme-btn--secondary:active { border-color: var(--acme-color-text-subtle); }
+.acme-btn--ghost { color: var(--acme-color-text-muted); }
+.acme-btn--ghost:hover {
+  background: var(--acme-color-surface);
+  color: var(--acme-color-text);
+}
+.acme-btn--danger {
+  background: var(--acme-color-danger-emphasis);
+  color: var(--acme-color-on-primary);
+}
+.acme-btn--danger:hover { filter: brightness(0.92); }
+.acme-btn--sm { min-height: 2rem; padding: 0 var(--acme-space-3); font-size: var(--acme-text-xs); }
+.acme-btn--lg { min-height: 3rem; padding: 0 var(--acme-space-5); font-size: var(--acme-text-md); }
+.acme-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --------------------------------------------------------------------------
+   5. Forms
+   -------------------------------------------------------------------------- */
+.acme-field { display: grid; gap: var(--acme-space-1); }
+.acme-label {
+  font-size: var(--acme-text-sm);
+  font-weight: 600;
+}
+.acme-label__optional {
+  font-weight: 400;
+  color: var(--acme-color-text-subtle);
+}
+.acme-input {
+  min-height: 2.5rem;
+  padding: 0 var(--acme-space-3);
+  border: 1px solid var(--acme-color-border-strong);
+  border-radius: var(--acme-radius-md);
+  font: 400 var(--acme-text-sm) / var(--acme-leading-normal) var(--acme-font-sans);
+  color: var(--acme-color-text);
+  background: var(--acme-color-surface-raised);
+  transition: border-color var(--acme-duration-base) var(--acme-ease-out);
+}
+textarea.acme-input { padding: var(--acme-space-2) var(--acme-space-3); min-height: 5rem; resize: vertical; }
+.acme-input:hover { border-color: var(--acme-color-text-subtle); }
+.acme-input::placeholder { color: var(--acme-color-text-subtle); }
+.acme-input[aria-invalid="true"] { border-color: var(--acme-color-danger); }
+.acme-input:disabled { background: var(--acme-color-surface); opacity: 0.6; cursor: not-allowed; }
+.acme-help { font-size: var(--acme-text-xs); color: var(--acme-color-text-muted); }
+.acme-error {
+  font-size: var(--acme-text-xs);
+  font-weight: 500;
+  color: var(--acme-color-danger);
+}
+
+.acme-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--acme-space-2);
+  font-size: var(--acme-text-sm);
+}
+.acme-choice input {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  margin: 0.125rem 0 0;
+  flex: none;
+}
+
+.acme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--acme-space-2);
+  font-size: var(--acme-text-sm);
+}
+.acme-switch input {
+  appearance: none;
+  position: relative;
+  inline-size: 2.5rem;
+  block-size: 1.5rem;
+  flex: none;
+  margin: 0;
+  border: none;
+  border-radius: var(--acme-radius-full);
+  background: var(--acme-color-border-strong);
+  cursor: pointer;
+  transition: background-color var(--acme-duration-base) var(--acme-ease-out);
+}
+.acme-switch input::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  border-radius: var(--acme-radius-full);
+  background: var(--acme-gray-0);
+  box-shadow: var(--acme-shadow-sm);
+  transition: translate var(--acme-duration-base) var(--acme-ease-out);
+}
+.acme-switch input:checked { background: var(--acme-color-selected); }
+.acme-switch input:checked::before { translate: 1rem 0; }
+
+/* --------------------------------------------------------------------------
+   6. Card
+   -------------------------------------------------------------------------- */
+.acme-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-lg);
+  background: var(--acme-color-surface-raised);
+  box-shadow: var(--acme-shadow-sm);
+  overflow: hidden;
+}
+.acme-card--interactive {
+  transition:
+    border-color var(--acme-duration-base) var(--acme-ease-out),
+    box-shadow var(--acme-duration-base) var(--acme-ease-out);
+}
+.acme-card--interactive:hover {
+  border-color: var(--acme-color-border-strong);
+  box-shadow: var(--acme-shadow-md);
+}
+.acme-card__media {
+  aspect-ratio: 16 / 9;
+  background: var(--acme-color-surface);
+  display: grid;
+  place-items: center;
+  color: var(--acme-color-text-subtle);
+}
+.acme-card__body { padding: var(--acme-space-5); flex: 1; }
+.acme-card__title { font-size: var(--acme-text-lg); margin-block-end: var(--acme-space-1); }
+.acme-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--acme-space-2);
+  padding: var(--acme-space-4) var(--acme-space-5);
+  border-block-start: 1px solid var(--acme-color-border);
+}
+
+/* --------------------------------------------------------------------------
+   7. Badge
+   -------------------------------------------------------------------------- */
+.acme-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--acme-space-1);
+  padding: 0.125rem var(--acme-space-2);
+  border-radius: var(--acme-radius-full);
+  font: 600 var(--acme-text-xs) / var(--acme-leading-normal) var(--acme-font-sans);
+  background: var(--acme-color-surface);
+  color: var(--acme-color-text-muted);
+}
+.acme-badge--success { background: var(--acme-color-success-soft); color: var(--acme-color-success-soft-text); }
+.acme-badge--warning { background: var(--acme-color-warning-soft); color: var(--acme-color-warning-soft-text); }
+.acme-badge--danger  { background: var(--acme-color-danger-soft);  color: var(--acme-color-danger-soft-text); }
+.acme-badge--info    { background: var(--acme-color-info-soft);    color: var(--acme-color-info-soft-text); }
+
+/* --------------------------------------------------------------------------
+   8. Alert
+   -------------------------------------------------------------------------- */
+.acme-alert {
+  display: flex;
+  gap: var(--acme-space-3);
+  padding: var(--acme-space-4);
+  border: 1px solid var(--acme-color-border);
+  border-inline-start: 3px solid var(--acme-color-info);
+  border-radius: var(--acme-radius-md);
+  background: var(--acme-color-info-soft);
+  font-size: var(--acme-text-sm);
+}
+.acme-alert__title { font-weight: 700; margin-block-end: var(--acme-space-1); }
+.acme-alert p:last-child { margin: 0; }
+.acme-alert--success { border-inline-start-color: var(--acme-color-success); background: var(--acme-color-success-soft); }
+.acme-alert--warning { border-inline-start-color: var(--acme-color-warning); background: var(--acme-color-warning-soft); }
+.acme-alert--danger  { border-inline-start-color: var(--acme-color-danger);  background: var(--acme-color-danger-soft); }
+
+/* --------------------------------------------------------------------------
+   9. Table
+   -------------------------------------------------------------------------- */
+.acme-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--acme-text-sm);
+}
+.acme-table th {
+  text-align: start;
+  font-size: var(--acme-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--acme-color-text-muted);
+  padding: var(--acme-space-2) var(--acme-space-3);
+  border-block-end: 1px solid var(--acme-color-border-strong);
+}
+.acme-table td {
+  padding: var(--acme-space-3);
+  border-block-end: 1px solid var(--acme-color-border);
+}
+.acme-table tbody tr:hover { background: var(--acme-color-surface); }
+.acme-table .acme-table__num { text-align: end; font-variant-numeric: tabular-nums; }
+
+.acme-table th:is([aria-sort="ascending"], [aria-sort="descending"]) {
+  color: var(--acme-color-selected);
+  border-block-end-color: var(--acme-color-selected);
+}
+.acme-table tbody tr[aria-selected="true"],
+.acme-table tbody tr[aria-selected="true"]:hover {
+  background: var(--acme-color-selected-soft);
+}
+
+/* --------------------------------------------------------------------------
+   10. Tabs
+   -------------------------------------------------------------------------- */
+.acme-tabs {
+  display: flex;
+  gap: var(--acme-space-2);
+  border-block-end: 1px solid var(--acme-color-border);
+}
+.acme-tab {
+  padding: var(--acme-space-2) var(--acme-space-3);
+  border: none;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  background: none;
+  font: 500 var(--acme-text-sm) / var(--acme-leading-normal) var(--acme-font-sans);
+  color: var(--acme-color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--acme-duration-base) var(--acme-ease-out),
+    color var(--acme-duration-base) var(--acme-ease-out);
+}
+.acme-tab:hover { color: var(--acme-color-text); }
+.acme-tab[aria-selected="true"] {
+  border-block-end-color: var(--acme-color-selected);
+  color: var(--acme-color-selected);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   11. Top bar & breadcrumbs
+   -------------------------------------------------------------------------- */
+.acme-topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--acme-space-6);
+  padding: var(--acme-space-3) var(--acme-space-5);
+  background: var(--acme-color-canvas);
+  border-block-end: 1px solid var(--acme-color-border);
+  color: var(--acme-color-text);
+}
+.acme-topbar__nav { display: flex; gap: var(--acme-space-1); margin-inline-start: auto; }
+.acme-topbar__link {
+  padding: var(--acme-space-1) var(--acme-space-3);
+  border-radius: var(--acme-radius-sm);
+  color: var(--acme-color-text-muted);
+  font-size: var(--acme-text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition:
+    background-color var(--acme-duration-base) var(--acme-ease-out),
+    color var(--acme-duration-base) var(--acme-ease-out);
+}
+.acme-topbar__link:hover { color: var(--acme-color-text); background: var(--acme-color-surface); }
+.acme-topbar__link[aria-current="page"] {
+  background: var(--acme-color-selected-soft);
+  color: var(--acme-color-selected);
+  font-weight: 600;
+}
+
+.acme-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--acme-space-2);
+  font-size: var(--acme-text-sm);
+  color: var(--acme-color-text-subtle);
+}
+.acme-breadcrumbs a { color: var(--acme-color-text-muted); text-decoration: none; }
+.acme-breadcrumbs a:hover { text-decoration: underline; }
+.acme-breadcrumbs [aria-current="page"] { color: var(--acme-color-text); font-weight: 500; }
+
+/* --------------------------------------------------------------------------
+   12. Modal
+   -------------------------------------------------------------------------- */
+.acme-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--acme-space-5);
+  background: rgb(17 26 43 / 0.5);
+}
+.acme-modal {
+  inline-size: min(28rem, 100%);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-xl);
+  background: var(--acme-color-surface-raised);
+  box-shadow: var(--acme-shadow-lg);
+}
+.acme-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--acme-space-5) var(--acme-space-6) 0;
+}
+.acme-modal__title { font-size: var(--acme-text-xl); margin: 0; }
+.acme-modal__body { padding: var(--acme-space-3) var(--acme-space-6); color: var(--acme-color-text-muted); font-size: var(--acme-text-sm); }
+.acme-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--acme-space-2);
+  padding: var(--acme-space-4) var(--acme-space-6) var(--acme-space-6);
+}

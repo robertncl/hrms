@@ -99,7 +99,7 @@ describe('DemoBackend', () => {
 
   it('should log in a demo account and return its permissions', async () => {
     const response = await request(http.post<{ token: string; user: { role: string }; permissions: object }>(
-      '/api/auth/login', { email: 'ADMIN@hrms.demo', password: DEMO_PASSWORD },
+      '/api/auth/login', { email: 'ADMIN@acme.com', password: DEMO_PASSWORD },
     ));
     expect(response.token).toBeTruthy();
     expect(response.user.role).toBe('HR Administrator');
@@ -108,20 +108,20 @@ describe('DemoBackend', () => {
   });
 
   it('should reject a wrong password', async () => {
-    await expectError(request(http.post('/api/auth/login', { email: 'admin@hrms.demo', password: 'nope' })), 401);
+    await expectError(request(http.post('/api/auth/login', { email: 'admin@acme.com', password: 'nope' })), 401);
   });
 
   it('should register a new account that can then log in', async () => {
-    await request(http.post('/api/auth/register', { email: 'new@hrms.demo', password: 'pw' }));
-    await expectError(request(http.post('/api/auth/register', { email: 'new@hrms.demo', password: 'pw' })), 409);
+    await request(http.post('/api/auth/register', { email: 'new@acme.com', password: 'pw' }));
+    await expectError(request(http.post('/api/auth/register', { email: 'new@acme.com', password: 'pw' })), 409);
 
-    const response = await request(http.post<{ token: string }>('/api/auth/login', { email: 'new@hrms.demo', password: 'pw' }));
+    const response = await request(http.post<{ token: string }>('/api/auth/login', { email: 'new@acme.com', password: 'pw' }));
     expect(response.token).toBeTruthy();
   });
 
   it('should persist changes and restore the seed on reset', async () => {
     await request(http.delete('/employees/1'));
-    expect(JSON.parse(localStorage.getItem('hrms-demo-db')!).employees.length).toBe(seed.employees.length - 1);
+    expect(JSON.parse(localStorage.getItem('acme-people-db')!).employees.length).toBe(seed.employees.length - 1);
 
     backend.reset();
     const employees = await request(http.get<Employee[]>('/employees'));
@@ -133,8 +133,8 @@ describe('DemoBackend', () => {
   });
 
   it('should build plain ASCII work emails from names', () => {
-    expect(workEmail('James', "O'Connor")).toBe('james.oconnor@hrms.demo');
-    expect(workEmail('Amelia', 'García')).toBe('amelia.garcia@hrms.demo');
+    expect(workEmail('James', "O'Connor")).toBe('james.oconnor@acme.com');
+    expect(workEmail('Amelia', 'García')).toBe('amelia.garcia@acme.com');
   });
 
   describe('learning', () => {
@@ -161,7 +161,7 @@ describe('DemoBackend', () => {
 
     it('should not store the derived fields', async () => {
       const created = await request(http.post<Enrollment>('/enrollments', { courseId: 5, employeeId: 18, status: 'Completed' }));
-      const stored = JSON.parse(localStorage.getItem('hrms-demo-db')!).enrollments.find((e: Enrollment) => e.id === created.id);
+      const stored = JSON.parse(localStorage.getItem('acme-people-db')!).enrollments.find((e: Enrollment) => e.id === created.id);
       expect(stored.status).toBeUndefined();
       expect(created.status).toBe('Not started');
     });
@@ -204,7 +204,7 @@ describe('DemoBackend', () => {
       old.employees = old.employees!.filter(e => e.id !== 3);
       delete old.courses;
       delete old.enrollments;
-      localStorage.setItem('hrms-demo-db', JSON.stringify(old));
+      localStorage.setItem('acme-people-db', JSON.stringify(old));
 
       const migrated = TestBed.runInInjectionContext(() => new DemoBackend());
       const db = JSON.parse(JSON.stringify((migrated as unknown as { db: typeof seed }).db)) as typeof seed;

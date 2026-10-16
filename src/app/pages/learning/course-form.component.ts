@@ -123,8 +123,8 @@ const moduleControl = (title = '') => new FormControl(title, { nonNullable: true
       gap: 0.5rem;
       margin: 1.25rem 0 0;
       padding: 0.9rem 1rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      border: 1px solid var(--acme-color-border);
+      border-radius: var(--acme-radius-md);
     }
     .modules legend { padding: 0 0.35rem; font-size: 0.88rem; font-weight: 600; }
     .module-row { display: flex; align-items: center; gap: 0.5rem; }
@@ -132,7 +132,7 @@ const moduleControl = (title = '') => new FormControl(title, { nonNullable: true
       flex: none;
       width: 1.5rem;
       text-align: center;
-      color: var(--text-secondary);
+      color: var(--acme-color-text-muted);
       font-variant-numeric: tabular-nums;
     }
     .module-row input {
@@ -140,14 +140,14 @@ const moduleControl = (title = '') => new FormControl(title, { nonNullable: true
       min-width: 0;
       min-height: 2.25rem;
       padding: 0.4rem 0.65rem;
-      border: 1px solid var(--border-strong);
-      border-radius: var(--radius-sm);
-      background: var(--surface);
-      color: var(--text);
+      border: 1px solid var(--acme-color-border-strong);
+      border-radius: var(--acme-radius-md);
+      background: var(--acme-color-surface);
+      color: var(--acme-color-text);
       font: inherit;
     }
-    .module-row input[aria-invalid='true'] { border-color: var(--critical); }
-    .error-msg { font-size: 0.82rem; color: var(--danger-text); }
+    .module-row input[aria-invalid='true'] { border-color: var(--acme-color-danger); }
+    .error-msg { font-size: 0.82rem; color: var(--acme-color-danger); }
   `,
   imports: [ReactiveFormsModule, RouterLink, IconComponent],
 })

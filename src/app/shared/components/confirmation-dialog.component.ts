@@ -9,8 +9,11 @@ import { enableLightDismissFallback } from '../functions/light-dismiss';
       (close)="onDialogClose()">
       <h2 id="confirmation-title">{{ title }}</h2>
       <p id="confirmation-message">{{ message }}</p>
+      @if (note) {
+        <p class="alert alert-info">{{ note }}</p>
+      }
       <div class="dialog-actions">
-        <button class="btn" (click)="cancel()">Cancel</button>
+        <button class="btn" (click)="cancel()">{{ cancelLabel }}</button>
         <button class="btn" [class.btn-danger]="destructive" [class.btn-primary]="!destructive" (click)="confirm()">
           {{ confirmLabel }}
         </button>
@@ -23,6 +26,9 @@ export class ConfirmationDialogComponent implements AfterViewInit {
   @Input() title = 'Please confirm';
   @Input() message = 'Are you sure you want to perform this action?';
   @Input() confirmLabel = 'Confirm';
+  @Input() cancelLabel = 'Cancel';
+  /** Optional context that helps the reader choose a safer path. */
+  @Input() note = '';
   @Input() destructive = false;
   @Input() onConfirm?: () => void;
   @Input() onClose?: () => void;

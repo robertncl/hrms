@@ -140,9 +140,9 @@ import { COURSE_CATEGORIES, completionRate, formatDuration, isOverdue } from './
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     }
     .stat { display: grid; gap: 0.15rem; }
-    .stat-label { font-size: 0.9rem; color: var(--text-secondary); }
+    .stat-label { font-size: 0.9rem; color: var(--acme-color-text-muted); }
     .stat-value { font-size: 2rem; font-weight: 650; line-height: 1.2; }
-    .stat-note { font-size: 0.82rem; color: var(--text-muted); }
+    .stat-note { font-size: 0.82rem; color: var(--acme-color-text-subtle); }
     .panels {
       display: grid;
       gap: 1rem;
@@ -155,7 +155,7 @@ import { COURSE_CATEGORIES, completionRate, formatDuration, isOverdue } from './
       align-items: center;
       gap: 0.75rem;
       padding: 0.6rem 0;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--acme-color-border);
     }
     .list li:last-child { border-bottom: 0; }
     .grow { flex: 1; display: grid; min-width: 0; }
@@ -183,15 +183,15 @@ import { COURSE_CATEGORIES, completionRate, formatDuration, isOverdue } from './
       gap: 0.4rem;
       transition: border-color 120ms;
     }
-    .course:hover { border-color: var(--border-strong); }
+    .course:hover { border-color: var(--acme-color-border-strong); }
     .course-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-    .course h3 a { color: var(--text); text-decoration: none; }
+    .course h3 a { color: var(--acme-color-text); text-decoration: none; }
     /* Whole card is clickable through the title link. */
     .course h3 a::after { content: ''; position: absolute; inset: 0; }
     .course h3 a:focus-visible { outline: none; }
-    .course:has(h3 a:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .course:has(h3 a:focus-visible) { outline: 2px solid var(--acme-color-focus); outline-offset: 2px; }
     .description {
-      color: var(--text-secondary);
+      color: var(--acme-color-text-muted);
       font-size: 0.88rem;
       display: -webkit-box;
       -webkit-box-orient: vertical;

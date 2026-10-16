@@ -50,15 +50,15 @@ describe('RegistrationComponent', () => {
   it('should show an error message in the template when passwords mismatch', () => {
     component.credentials = { email: 'a@b.com', password: 'secret', confirmPassword: 'different' };
     fixture.detectChanges();
-    const error = fixture.debugElement.nativeElement.querySelector('.error');
+    const error = fixture.debugElement.nativeElement.querySelector('.error-msg');
     expect(error).toBeTruthy();
-    expect(error.textContent).toContain('Passwords do not match');
+    expect(error.textContent).toContain("Those two passwords don't match");
   });
 
   it('should not show an error message when passwords match', () => {
     component.credentials = { email: 'a@b.com', password: 'secret', confirmPassword: 'secret' };
     fixture.detectChanges();
-    const error = fixture.debugElement.nativeElement.querySelector('.error');
+    const error = fixture.debugElement.nativeElement.querySelector('.error-msg');
     expect(error).toBeFalsy();
   });
 

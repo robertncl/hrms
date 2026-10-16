@@ -31,11 +31,9 @@ describe('FooterComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should render the HRMS heading and social links', () => {
+  it('should render the ACME copyright line', () => {
     const compiled: HTMLElement = fixture.nativeElement;
-    expect(compiled.querySelector('h2')?.textContent).toContain('HRMS');
-    const links = fixture.debugElement.queryAll(By.css('.links a'));
-    expect(links.length).toBe(2);
+    expect(compiled.querySelector('.copyright')?.textContent).toContain('ACME Corp');
   });
 
   it('should not render legal links when not authenticated', () => {

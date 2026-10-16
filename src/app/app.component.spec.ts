@@ -3,12 +3,11 @@ import { AppComponent } from './app.component';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
 import { of } from 'rxjs';
-import { HeaderComponent } from './shared/components/header.component';
 import { FooterComponent } from './shared/components/footer.component';
 
 describe('AppComponent', () => {
   beforeEach(() => TestBed.configureTestingModule({
-    imports: [AppComponent, HttpClientTestingModule, HeaderComponent, FooterComponent],
+    imports: [AppComponent, HttpClientTestingModule, FooterComponent],
     providers: [
       {
         provide: ActivatedRoute,

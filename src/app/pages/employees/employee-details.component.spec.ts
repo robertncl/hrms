@@ -5,6 +5,8 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { EmployeeDetailsComponent } from './employee-details.component';
 import { ProjectService } from 'src/app/services/project.service';
+import { EmployeeService } from 'src/app/services/employee.service';
+import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { Project } from 'src/app/infrastructure/types/project';
 import { imageLoader } from 'src/app/app.config';
@@ -53,14 +55,21 @@ describe('EmployeeDetailsComponent', () => {
   beforeEach(async () => {
     mockProjectService.getProjectsByEmployeeId.calls.reset();
     mockProjectService.getProjectsByEmployeeId.and.returnValue(of(mockProjects));
+    mockEnrollmentService.getEnrollmentsByEmployee.calls.reset();
+    mockEnrollmentService.getEnrollmentsByEmployee.and.returnValue(of(enrollments));
 
     await TestBed.configureTestingModule({
       imports: [EmployeeDetailsComponent, NoopAnimationsModule],
       providers: [
         provideRouter([]),
         { provide: ProjectService, useValue: mockProjectService },
+        { provide: EmployeeService, useValue: { getEmployees: () => of([mockEmployee]) } },
+        { provide: TimeOffRequestService, useValue: { getRequests: () => of([]) } },
         { provide: EnrollmentService, useValue: mockEnrollmentService },
-        { provide: CourseService, useValue: { getCourses: () => of([course(1, 'Security'), course(2, 'Privacy')]) } },
+        {
+          provide: CourseService,
+          useValue: { getCourses: () => of([course(1, 'Security'), course(2, 'Privacy')]) },
+        },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],
     }).compileComponents();
@@ -86,9 +95,15 @@ describe('EmployeeDetailsComponent', () => {
     expect(text).toContain(mockEmployee.position);
   });
 
-  it('should render a project card per project returned by the service', () => {
-    const cards = fixture.debugElement.nativeElement.querySelectorAll('app-project-card');
-    expect(cards.length).toBe(mockProjects.length);
+  it('should render a row per project returned by the service', () => {
+    const rows = fixture.debugElement.nativeElement.querySelectorAll('.project-row');
+    expect(rows.length).toBe(mockProjects.length);
+    expect(rows[0].textContent).toContain('Project A');
+  });
+
+  it('should show the status as a labelled dot, not colour alone', () => {
+    const status = fixture.debugElement.nativeElement.querySelector('.status');
+    expect(status.textContent.trim()).toBe('In today');
   });
 
   it("should list the employee's training, overdue first", async () => {
@@ -96,10 +111,12 @@ describe('EmployeeDetailsComponent', () => {
     fixture.detectChanges();
 
     expect(mockEnrollmentService.getEnrollmentsByEmployee).toHaveBeenCalledWith(mockEmployee.id);
-    const items = Array.from(fixture.nativeElement.querySelectorAll('.training-list li') as NodeListOf<HTMLElement>);
-    expect(items.map((li) => li.querySelector('a')!.textContent!.trim())).toEqual(['Privacy', 'Security']);
-    expect(items[0].querySelector('.badge')!.textContent).toContain('Overdue');
-    expect(items[1].textContent).toContain('Completed Jan 10, 2026');
-    expect(fixture.nativeElement.querySelector('.training').textContent).toContain('1 of 2 complete');
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.learning-row') as NodeListOf<HTMLElement>);
+    expect(rows.map((row) => row.querySelector('a')!.textContent!.trim())).toEqual(['Privacy', 'Security']);
+    expect(rows[0].querySelector('.badge')!.textContent).toContain('Overdue');
+    expect(rows[1].textContent).toContain('Completed 10 Jan');
+
+    const card = fixture.nativeElement.querySelector('[aria-labelledby="learning-title"]');
+    expect(card.textContent).toContain('1 of 2 complete');
   });
 });

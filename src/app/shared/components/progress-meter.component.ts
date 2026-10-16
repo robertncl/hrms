@@ -14,27 +14,27 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
     :host {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: var(--acme-space-2);
       width: 100%;
       min-width: 7rem;
     }
     .meter {
       flex: 1;
       height: 8px;
-      border-radius: 999px;
-      background: var(--meter-track);
+      border-radius: var(--acme-radius-full);
+      background: var(--acme-color-surface);
       overflow: hidden;
     }
     .fill {
       display: block;
       height: 100%;
-      border-radius: 999px;
-      background: var(--series-1);
+      border-radius: var(--acme-radius-full);
+      background: var(--acme-color-data);
     }
     .value {
       min-width: 2.75rem;
       text-align: end;
-      font-size: 0.85rem;
+      font-size: var(--acme-text-sm);
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }

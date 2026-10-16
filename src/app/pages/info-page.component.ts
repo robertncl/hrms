@@ -11,13 +11,13 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       <section class="card prose">
         <p>{{ body() }}</p>
         <p class="muted">
-          This HRMS instance is a demo: all people, projects and requests are fictional, and every
-          change you make is stored only in this browser.
+          ACME People is a demo here: every person, project and request is fictional, and the
+          changes you make are stored only in this browser.
         </p>
       </section>
     </div>
   `,
-  styles: `.prose { display: grid; gap: 0.75rem; max-width: 70ch; }`,
+  styles: `.prose { display: grid; gap: var(--acme-space-3); max-width: 70ch; }`,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class InfoPageComponent {

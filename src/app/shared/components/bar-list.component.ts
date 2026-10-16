@@ -33,41 +33,40 @@ export type BarListItem = { label: string; value: number; link?: string | unknow
       padding: 0;
       display: grid;
       grid-template-columns: max-content 1fr;
-      gap: 0.5rem 0.9rem;
+      gap: var(--acme-space-2) var(--acme-space-4);
     }
     li {
       display: grid;
       grid-column: 1 / -1;
       grid-template-columns: subgrid;
       align-items: center;
-      padding: 0.2rem 0;
+      padding: var(--acme-space-1) 0;
     }
     .label {
-      font-size: 0.9rem;
-      color: var(--text-secondary);
+      font-size: var(--acme-text-sm);
+      color: var(--acme-color-text-muted);
       text-decoration: none;
     }
-    a.label:hover { color: var(--link); text-decoration: underline; }
+    a.label:hover { color: var(--acme-color-link); text-decoration: underline; }
     .track {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: var(--acme-space-2);
       min-height: 20px;
-      border-inline-start: 1px solid var(--border-strong);
     }
+    /* Slate carries the data; Cobalt is reserved for the one takeaway. */
     .bar {
       flex: 0 0 0;
       min-width: 2px;
-      height: 18px;
-      border-radius: 0 4px 4px 0;
-      background: var(--series-1);
-      transition: filter 120ms;
+      height: 10px;
+      border-radius: var(--acme-radius-full);
+      background: var(--acme-color-data);
     }
-    li:hover .bar { filter: brightness(1.15); }
     .value {
-      font-size: 0.9rem;
+      font-size: var(--acme-text-sm);
       font-weight: 600;
-      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      color: var(--acme-color-text);
     }
   `,
   imports: [RouterLink],

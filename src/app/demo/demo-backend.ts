@@ -12,7 +12,7 @@ import { Employee } from '../infrastructure/types/employee';
 import { Enrollment } from '../infrastructure/types/course';
 import { DemoDatabase, StoredEnrollment, createDemoDatabase, daysFromToday } from './demo-data';
 
-const STORAGE_KEY = 'hrms-demo-db';
+const STORAGE_KEY = 'acme-people-db';
 
 type Collection = Exclude<keyof DemoDatabase, 'users'>;
 type Row = { id: number } & Record<string, unknown>;
@@ -27,7 +27,7 @@ const ok = (body: unknown, status = 200): Result => ({ status, body });
 const fail = (status: number, message: string): Result => ({ status, body: { message } });
 
 /**
- * In-browser stand-in for the HRMS REST API, so the demo runs without a server.
+ * In-browser stand-in for the ACME People REST API, so the demo runs without a server.
  *
  * It mimics the json-server conventions the services already use
  * (`/employees`, `/employees/:id`, `?firstName_like=`) plus `/api/auth/*`,

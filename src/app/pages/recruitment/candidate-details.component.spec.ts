@@ -64,9 +64,9 @@ describe('CandidateDetailsComponent', () => {
   it('should render candidate name, email and position', () => {
     setCandidate(buildCandidate());
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h2')?.textContent).toContain('Jane Doe');
-    expect(compiled.textContent).toContain('Email: jane.doe@example.com');
-    expect(compiled.textContent).toContain('Developer');
+    expect(compiled.querySelector('h1')?.textContent).toContain('Jane Doe');
+    expect(compiled.textContent).toContain('jane.doe@example.com');
+    expect(compiled.textContent?.toLowerCase()).toContain('developer');
   });
 
   it('should select CvEvaluationComponent for CV evaluation status', () => {
@@ -134,7 +134,7 @@ describe('CandidateDetailsComponent', () => {
 
   it('should mark the current step in the progress list', () => {
     setCandidate(buildCandidate({ status: 'Interview Feedback' }));
-    const current = fixture.nativeElement.querySelector('.stepper [aria-current="step"]');
+    const current = fixture.nativeElement.querySelector('.stages [aria-current="step"]');
     expect(current.textContent).toContain('Feedback');
   });
 

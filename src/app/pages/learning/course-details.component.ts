@@ -212,7 +212,7 @@ const DEFAULT_DUE_DAYS = 30;
       grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
       align-items: start;
     }
-    .description { color: var(--text-secondary); max-width: 70ch; }
+    .description { color: var(--acme-color-text-muted); max-width: 70ch; }
     .modules-title { margin: 1.25rem 0 0.5rem; }
     .modules { margin: 0; padding-inline-start: 1.25rem; display: grid; gap: 0.35rem; }
     .summary-meter { display: grid; gap: 0.3rem; margin-top: 1rem; }
@@ -226,8 +226,8 @@ const DEFAULT_DUE_DAYS = 30;
       overflow-y: auto;
       margin: 1rem 0;
       padding: 0.5rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      border: 1px solid var(--acme-color-border);
+      border-radius: var(--acme-radius-md);
     }
     .people legend {
       display: flex;
@@ -242,10 +242,10 @@ const DEFAULT_DUE_DAYS = 30;
       align-items: center;
       gap: 0.6rem;
       padding: 0.3rem 0.25rem;
-      border-radius: var(--radius-sm);
+      border-radius: var(--acme-radius-md);
       cursor: pointer;
     }
-    .person-option:hover { background: var(--surface-hover); }
+    .person-option:hover { background: var(--acme-color-surface); }
     .person-option input { width: 1.05rem; height: 1.05rem; }
     @media (max-width: 860px) {
       .layout { grid-template-columns: minmax(0, 1fr); }
