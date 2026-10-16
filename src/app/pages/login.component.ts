@@ -40,14 +40,25 @@ import { environment } from 'src/environments/environment';
       </p>
 
       @if (demoAccounts.length) {
-        <p class="alert alert-info">
-          Trying the demo? Sign in as
-          @for (account of demoAccounts; track account.email; let last = $last) {
-            <button class="use" type="button" (click)="useAccount(account.email)">{{ account.email }}</button
-            >{{ last ? '' : ' or ' }}
-          }
-          with the password <strong>{{ demoPassword }}</strong>.
-        </p>
+        <section class="demo" aria-labelledby="demo-title">
+          <h2 id="demo-title">Trying the demo?</h2>
+          <p class="small muted">
+            Each account sees ACME People as a different role. Pick one, then sign in.
+            The password is <strong>{{ demoPassword }}</strong> for all of them.
+          </p>
+          <ul>
+            @for (account of demoAccounts; track account.email) {
+              <li>
+                <button class="use" type="button" [attr.aria-pressed]="credentials.email === account.email"
+                  (click)="useAccount(account.email)">
+                  <span class="role">{{ account.role }} <span class="who">· {{ account.name }}</span></span>
+                  <span class="email">{{ account.email }}</span>
+                  <span class="summary">{{ account.summary }}</span>
+                </button>
+              </li>
+            }
+          </ul>
+        </section>
       }
     </app-auth-layout>
     `,
@@ -56,19 +67,35 @@ import { environment } from 'src/environments/environment';
     .field input { min-height: 2.75rem; }
     .btn-block { width: 100%; min-height: 2.75rem; font-size: var(--acme-text-md); }
 
-    /* The demo addresses are the fastest way in, so make them clickable
-       rather than something to retype. */
+    .demo { display: grid; gap: var(--acme-space-2); }
+    .demo h2 { margin: 0; font-size: var(--acme-text-md); }
+    .demo ul { display: grid; gap: var(--acme-space-2); margin: var(--acme-space-1) 0 0; padding: 0; list-style: none; }
+
+    /* The demo accounts are the fastest way in, so each is one click
+       rather than an address to retype. */
     .use {
-      border: 0;
-      padding: 0;
-      background: none;
-      color: inherit;
-      font-family: inherit;
-      font-size: inherit;
-      font-weight: 600;
-      text-decoration: underline;
+      display: grid;
+      gap: 2px;
+      width: 100%;
+      padding: var(--acme-space-2) var(--acme-space-3);
+      border: 1px solid var(--acme-color-border);
+      border-radius: var(--acme-radius-md);
+      background: var(--acme-color-surface-raised);
+      color: var(--acme-color-text);
+      font: inherit;
+      text-align: left;
       cursor: pointer;
     }
+    .use:hover { border-color: var(--acme-color-text-subtle); }
+    .use[aria-pressed='true'] {
+      border: 2px solid var(--acme-color-selected);
+      padding: calc(var(--acme-space-2) - 1px) calc(var(--acme-space-3) - 1px);
+      background: var(--acme-color-selected-soft);
+    }
+    .use .role { font-size: var(--acme-text-sm); font-weight: 600; }
+    .use .who { font-weight: 400; color: var(--acme-color-text-muted); }
+    .use .email { font-size: var(--acme-text-xs); color: var(--acme-color-link); }
+    .use .summary { font-size: var(--acme-text-xs); color: var(--acme-color-text-muted); }
   `,
   standalone: true,
   imports: [FormsModule, RouterLink, AuthLayoutComponent],

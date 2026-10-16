@@ -2,7 +2,7 @@ import { Component, ElementRef, computed, inject, signal, viewChild } from '@ang
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { environment } from 'src/environments/environment';
 import { DemoBackend } from '../demo/demo-backend';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AuthService } from '../services/auth.service';
 import { CandidateService } from '../services/candidate.service';
@@ -12,12 +12,23 @@ import { EmployeeService } from '../services/employee.service';
 import { NotificationService } from '../services/notification.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { buildDecisionQueue } from '../pages/home/decision-queue';
+import { PermissionsService } from '../services/permissions.service';
+import { Permissions } from '../infrastructure/types/permissions';
 import { FooterComponent } from '../shared/components/footer.component';
 import { IconComponent, IconName } from '../shared/components/icon.component';
 import { NotificationsPanelComponent } from '../shared/components/notifications-panel.component';
 import { WordmarkComponent } from '../shared/components/wordmark.component';
 
-type NavItem = { label: string; link: string; icon: IconName };
+type NavItem = { label: string; link: string; icon: IconName; permission?: Permissions };
+
+const NAV_ITEMS: NavItem[] = [
+  { label: 'Home', link: '/dashboard', icon: 'home' },
+  { label: 'People', link: '/employees', icon: 'users' },
+  { label: 'Projects', link: '/work/projects', icon: 'briefcase' },
+  { label: 'Time off', link: '/work/time-off', icon: 'calendar' },
+  { label: 'Hiring', link: '/recruitment', icon: 'user-plus', permission: 'ManageHiring' },
+  { label: 'Learning', link: '/learning', icon: 'book' },
+];
 
 /**
  * Layout for signed-in pages.
@@ -54,7 +65,7 @@ type NavItem = { label: string; link: string; icon: IconName };
         </form>
 
         <nav aria-label="Main">
-          @for (item of navItems; track item.link) {
+          @for (item of navItems(); track item.link) {
             <a [routerLink]="item.link" routerLinkActive="active" ariaCurrentWhenActive="page">
               <app-icon [name]="item.icon" />
               <span>{{ item.label }}</span>
@@ -269,14 +280,15 @@ export class ShellComponent {
   private readonly enrollmentService = inject(EnrollmentService);
   private readonly searchInput = viewChild<ElementRef<HTMLInputElement>>('searchInput');
 
-  readonly navItems: NavItem[] = [
-    { label: 'Home', link: '/dashboard', icon: 'home' },
-    { label: 'People', link: '/employees', icon: 'users' },
-    { label: 'Projects', link: '/work/projects', icon: 'briefcase' },
-    { label: 'Time off', link: '/work/time-off', icon: 'calendar' },
-    { label: 'Hiring', link: '/recruitment', icon: 'user-plus' },
-    { label: 'Learning', link: '/learning', icon: 'book' },
-  ];
+  private readonly permissions = inject(PermissionsService);
+  private readonly canApprove = this.permissions.can('ApproveTimeOff');
+  private readonly canHire = this.permissions.can('ManageHiring');
+  private readonly canAssign = this.permissions.can('AssignTraining');
+
+  /** Destinations this role can use; the rest are hidden, not greyed out. */
+  navItems = computed(() =>
+    NAV_ITEMS.filter((item) => !item.permission || (item.permission === 'ManageHiring' && this.canHire())),
+  );
 
   user = this.authService.currentUser;
   notificationsOpen = signal(false);
@@ -288,7 +300,8 @@ export class ShellComponent {
     forkJoin({
       employees: this.employeeService.getEmployees(),
       requests: this.timeOffRequestService.getRequests(),
-      candidates: this.candidateService.getCandidates(),
+      // Only hiring roles may read candidates.
+      candidates: this.canHire() ? this.candidateService.getCandidates() : of([]),
       enrollments: this.enrollmentService.getEnrollments(),
       courses: this.courseService.getCourses(),
     }),
@@ -307,6 +320,12 @@ export class ShellComponent {
           data.employees,
           data.enrollments,
           data.courses,
+          {
+            canApprove: this.canApprove(),
+            canHire: this.canHire(),
+            canAssign: this.canAssign(),
+            employeeId: this.user()?.employeeId,
+          },
         ).length
       : 0;
   });

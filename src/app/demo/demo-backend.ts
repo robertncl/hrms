@@ -8,9 +8,20 @@ import {
 } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, mergeMap, of, throwError, timer } from 'rxjs';
-import { Employee } from '../infrastructure/types/employee';
+import { Employee, PRIVATE_EMPLOYEE_FIELDS } from '../infrastructure/types/employee';
 import { Enrollment } from '../infrastructure/types/course';
-import { DemoDatabase, StoredEnrollment, createDemoDatabase, daysFromToday } from './demo-data';
+import { Permissions } from '../infrastructure/types/permissions';
+import {
+    DEMO_ACCOUNTS,
+    DEMO_DOMAIN,
+    DemoAccount,
+    DemoDatabase,
+    LEGACY_DEMO_DOMAIN,
+    StoredEnrollment,
+    createDemoDatabase,
+    daysFromToday,
+    permissionsFor,
+} from './demo-data';
 
 const STORAGE_KEY = 'acme-people-db';
 
@@ -25,6 +36,41 @@ const MANDATORY_COURSE_DUE_DAYS = 30;
 
 const ok = (body: unknown, status = 200): Result => ({ status, body });
 const fail = (status: number, message: string): Result => ({ status, body: { message } });
+
+/** How a refusal reads: "Your role can't approve time off." */
+const ACTIONS: Record<Permissions, string> = {
+    ViewEmployees: 'see People',
+    CreateEmployee: 'add people',
+    EditEmployeeGeneralDetails: 'edit people',
+    EditEmployeePrivateDetails: 'change private details',
+    DeleteEmployee: 'remove people',
+    ApproveTimeOff: 'approve time off',
+    ManageHiring: 'work on hiring',
+    AssignTraining: 'assign training',
+    ManageCourses: 'change the course catalog',
+};
+const forbidden = (permission: Permissions): Result => fail(403, `Your role can't ${ACTIONS[permission]}.`);
+
+/** Tokens name the account they were issued to: `demo.<base64 email>.<random>`. */
+const issueToken = (email: string) => `demo.${btoa(encodeURIComponent(email))}.${randomId()}`;
+
+function tokenEmail(req: HttpRequest<unknown>): string | null {
+    const match = /^Bearer demo\.([A-Za-z0-9+/=]+)\.[\w-]+$/.exec(req.headers.get('Authorization') ?? '');
+    if (!match) {
+        return null;
+    }
+    try {
+        return decodeURIComponent(atob(match[1]));
+    } catch {
+        return null;
+    }
+}
+
+/** What the client is told about whoever is signed in. */
+function session(account: DemoAccount) {
+    const { password: _, ...user } = account;
+    return { user, permissions: permissionsFor(account.role) };
+}
 
 /**
  * In-browser stand-in for the ACME People REST API, so the demo runs without a server.
@@ -74,6 +120,13 @@ export class DemoBackend {
     }
 
     private auth(action: string, req: HttpRequest<unknown>): Result {
+        if (action === 'session') {
+            if (req.method !== 'GET') {
+                return fail(405, 'Method not allowed');
+            }
+            const account = this.signedIn(req);
+            return account ? ok(session(account)) : fail(401, 'Your session has ended. Sign in again.');
+        }
         if (req.method !== 'POST') {
             return fail(405, 'Method not allowed');
         }
@@ -82,14 +135,16 @@ export class DemoBackend {
 
         switch (action) {
             case 'login': {
-                const account = this.db.users.find(
-                    u => u.email.toLowerCase() === normalizedEmail && u.password === password,
-                );
-                if (!account) {
-                    return fail(401, 'Invalid email or password');
+                const account = this.account(normalizedEmail);
+                if (account && account.password === password) {
+                    return ok({ token: issueToken(account.email), ...session(account) });
                 }
-                const { password: _, permissions, ...user } = account;
-                return ok({ token: `demo-${randomId()}`, user, permissions });
+                if (!account && normalizedEmail.endsWith(`@${LEGACY_DEMO_DOMAIN}`)) {
+                    const [name] = normalizedEmail.split('@');
+                    const suggestion = DEMO_ACCOUNTS.find(a => a.email === `${name}@${DEMO_DOMAIN}`)?.email ?? DEMO_ACCOUNTS[0].email;
+                    return fail(401, `The demo accounts moved to @${DEMO_DOMAIN}. Try ${suggestion} with the password ${DEMO_ACCOUNTS[0].password}.`);
+                }
+                return fail(401, 'Invalid email or password');
             }
             case 'logout':
                 return ok({});
@@ -97,15 +152,15 @@ export class DemoBackend {
                 if (!normalizedEmail || !password) {
                     return fail(400, 'Email and password are required');
                 }
-                if (this.db.users.some(u => u.email.toLowerCase() === normalizedEmail)) {
+                if (this.account(normalizedEmail)) {
                     return fail(409, 'An account with this email already exists');
                 }
+                // Self-registered accounts can try everything.
                 this.db.users.push({
                     name: normalizedEmail.split('@')[0],
                     email: normalizedEmail,
                     role: 'HR Administrator',
                     password,
-                    permissions: { ...this.db.users[0].permissions },
                 });
                 return ok({}, 201);
             }
@@ -114,11 +169,72 @@ export class DemoBackend {
         }
     }
 
+    /** A built-in demo account (always current, from code) or a registered one. */
+    private account(email: string): DemoAccount | undefined {
+        const normalized = email.trim().toLowerCase();
+        return DEMO_ACCOUNTS.find(a => a.email === normalized)
+            ?? this.db.users.find(u => u.email.toLowerCase() === normalized);
+    }
+
+    private signedIn(req: HttpRequest<unknown>): DemoAccount | undefined {
+        const email = tokenEmail(req);
+        return email ? this.account(email) : undefined;
+    }
+
+    /**
+     * The API's half of the permission model: the UI hides what a role can't
+     * do, and this refuses it anyway, so the two can't drift apart unnoticed.
+     */
+    private authorize(account: DemoAccount, collection: Collection, method: string, row: Row | undefined, body: Record<string, unknown>): Result | null {
+        const permissions = permissionsFor(account.role);
+        const need = (permission: Permissions) => (permissions[permission] ? null : forbidden(permission));
+        const own = (employeeId: unknown) => account.employeeId !== undefined && employeeId === account.employeeId;
+
+        switch (collection) {
+            case 'employees': {
+                if (method === 'GET') return need('ViewEmployees');
+                if (method === 'POST') return need('CreateEmployee');
+                if (method === 'DELETE') return need('DeleteEmployee');
+                const changesPrivate = PRIVATE_EMPLOYEE_FIELDS.some(field => field in body && body[field] !== row?.[field]);
+                return need('EditEmployeeGeneralDetails') ?? (changesPrivate ? need('EditEmployeePrivateDetails') : null);
+            }
+            case 'time-off-requests':
+                if (method === 'GET' || permissions.ApproveTimeOff) return null;
+                // Without approval rights people manage only their own requests:
+                // book them, and withdraw them while they are still pending.
+                if (method === 'POST' && own(body['employeeId'])) return null;
+                if (method === 'DELETE' && row && own(row['employeeId']) && row['status'] === 'Pending') return null;
+                return forbidden('ApproveTimeOff');
+            case 'candidates':
+                return need('ManageHiring');
+            case 'courses':
+                return method === 'GET' ? null : need('ManageCourses');
+            case 'enrollments': {
+                if (method === 'GET' || permissions.AssignTraining) return null;
+                // Learners can record their own progress, and nothing else.
+                const onlyProgress = Object.keys(body).every(key => key === 'completedModules');
+                if ((method === 'PATCH') && row && own(row['employeeId']) && onlyProgress) return null;
+                return forbidden('AssignTraining');
+            }
+            case 'projects':
+                return null;
+        }
+    }
+
     private rest(collection: Collection, idSegment: string | undefined, req: HttpRequest<unknown>, query: URLSearchParams): Result {
         const rows = this.db[collection] as unknown as Row[];
         const id = idSegment === undefined ? undefined : Number(idSegment);
         const index = id === undefined ? -1 : rows.findIndex(row => row.id === id);
         const body = (req.body ?? {}) as Record<string, unknown>;
+
+        const account = this.signedIn(req);
+        if (!account) {
+            return fail(401, 'Your session has ended. Sign in again.');
+        }
+        const refusal = this.authorize(account, collection, req.method, index === -1 ? undefined : rows[index], body);
+        if (refusal) {
+            return refusal;
+        }
 
         if (id === undefined) {
             switch (req.method) {
@@ -291,7 +407,7 @@ function matches(row: Row, query: URLSearchParams): boolean {
     return true;
 }
 
-/** Adds collections introduced after the data was first saved, keeping the visitor's changes. */
+/** Brings data saved by an older version up to date, keeping the visitor's changes. */
 function migrate(stored: Partial<DemoDatabase>): DemoDatabase {
     const seed = createDemoDatabase();
     const db = { ...seed, ...stored } as DemoDatabase;
@@ -300,6 +416,30 @@ function migrate(stored: Partial<DemoDatabase>): DemoDatabase {
         db.courses = seed.courses;
         db.enrollments = seed.enrollments.filter(e => employeeIds.has(e.employeeId));
     }
+    // Built-in accounts now live in code, so stale saved copies (with old
+    // emails or permissions) can no longer shadow them.
+    const builtIn = new Set(DEMO_ACCOUNTS.map(a => a.email));
+    db.users = db.users
+        .filter(u => !builtIn.has(u.email.toLowerCase()) && !u.email.toLowerCase().endsWith(`@${LEGACY_DEMO_DOMAIN}`))
+        .map(({ name, email, password, role }) => ({ name, email, password, role: role ?? 'HR Administrator' }));
+    // Seeded people saved before employee details existed get them filled in.
+    const seeded = new Map(seed.employees.map(e => [e.id, e]));
+    const ids = new Set(db.employees.map(e => e.id));
+    db.employees = db.employees.map(e => {
+        const fresh = seeded.get(e.id);
+        if (!fresh || e.startDate || fresh.firstName !== e.firstName || fresh.lastName !== e.lastName) {
+            return e;
+        }
+        const { startDate, location, managerId, phone, personalEmail } = fresh;
+        return {
+            ...e,
+            startDate,
+            location,
+            ...(managerId && ids.has(managerId) ? { managerId } : {}),
+            phone,
+            personalEmail,
+        };
+    });
     return db;
 }
 

@@ -6,27 +6,68 @@ Run `npm install` first. The commands below use the project's local Angular CLI 
 
 ## Demo
 
-HRMS runs as a self-contained demo: an in-browser mock API (`src/app/demo/`) serves seed data for 18 employees, 6 projects, 10 candidates, 8 courses and a set of time off requests, so no backend is needed. Start the dev server and sign in with either account (password `demo`):
+ACME People runs as a self-contained demo: an in-browser mock API (`src/app/demo/`) serves the sample data below, so no backend is needed. Start the dev server (`npm start`), open `http://localhost:4200/` and sign in as any of these accounts. The password is `demo` for all of them, and the sign-in page lists them so you can pick one with a click.
 
-| Account | Role | Can edit names and emails | Can manage courses |
+| Account | Signs in as | User type | What they can do |
 | --- | --- | --- | --- |
-| `admin@hrms.demo` | HR Administrator | Yes | Yes |
-| `lead@hrms.demo` | Team Lead | No (view only) | No (can still assign courses) |
+| `admin@acme.com` | Alex Morgan | HR Administrator | Everything, including changing private details and removing people. |
+| `lead@acme.com` | Olivia Bennett | Team Lead | Approves time off, runs hiring and assigns training. Edits people's role, level, location and manager, but not their private details. Can't add or remove people or change the course catalog. |
+| `recruiter@acme.com` | Priya Shah | Recruiter | Runs the hiring board and adds new hires to People. Can't edit or remove people, approve time off or assign training. |
+| `learning@acme.com` | Jordan Ellis | Learning Coordinator | Owns the course catalog and assigns training. Read-only everywhere else, with no access to Hiring. |
+| `employee@acme.com` | Charlotte Dubois | Employee | Self-service: books and withdraws her own time off, records progress on her own training, and sees her own private details. Read-only directory, no Hiring. |
 
-You can also create your own account on the registration page.
+Olivia Bennett and Charlotte Dubois are also people in the directory (Charlotte reports to Olivia), so their accounts see "their own" time off and training. The other three are HR and talent staff, who aren't in the directory, so they have no time off or training of their own.
 
-What you can do:
+The accounts used to be `admin@hrms.demo` and `lead@hrms.demo`. Signing in with an old address now tells you which `@acme.com` account to use instead. If you registered your own account on the registration page, it signs in as an HR Administrator.
 
-- **Dashboard**: headcount, who's away, pending time off (approve or reject in place), headcount by position and the hiring pipeline.
-- **Employees**: search and filter, add, edit and delete people, and see their projects.
-- **Projects**: browse projects, their teams and subprojects.
-- **Time off**: file, approve, reject and delete requests. Approving leave that covers today marks the person as on leave.
-- **Recruitment**: move candidates from CV screening through interview, offer and onboarding, ending with an employee record.
-- **Learning**: browse the course catalog, see completion and overdue training, assign courses to people with a due date, log their progress, and create, edit or delete courses. Mandatory courses are assigned to every new employee automatically, due 30 days after they start. Each employee's profile shows their training.
+### What each user type is allowed to do
 
-Changes are saved to `localStorage`, so they survive a reload. The refresh button in the header restores the original data. Dates in the seed data are relative to today, so the demo always looks current.
+Each user type is a set of permissions (`ROLE_PERMISSIONS` in `src/app/demo/demo-data.ts`). The screens hide whatever a role can't do, and the demo API refuses it with a `403` ("Your role can't approve time off.") in case anything slips through.
 
-To point the app at a real API instead, set `demo: false` and `apiUrl` in `src/environments/environment*.ts`. The mock API follows the same json-server style routes the services already call (`/employees`, `/employees/:id`, `?firstName_like=`) plus `/api/auth/login`, `/api/auth/logout` and `/api/auth/register`. Learning uses `/courses` and `/enrollments` (filterable by `courseId` and `employeeId`); the API derives each enrollment's `status` and `progress` from `completedModules`.
+| Permission | HR Administrator | Team Lead | Recruiter | Learning Coordinator | Employee |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| See People and profiles (`ViewEmployees`) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Add people (`CreateEmployee`) | ✓ | | ✓ | | |
+| Edit role, level, location, start date and manager (`EditEmployeeGeneralDetails`) | ✓ | ✓ | | | |
+| Edit name, work email, phone and personal email (`EditEmployeePrivateDetails`) | ✓ | | | | |
+| Remove people (`DeleteEmployee`) | ✓ | | | | |
+| Approve, decline and book time off for anyone (`ApproveTimeOff`) | ✓ | ✓ | | | |
+| Use the hiring board (`ManageHiring`) | ✓ | ✓ | ✓ | | |
+| Assign training and track anyone's progress (`AssignTraining`) | ✓ | ✓ | | ✓ | |
+| Create, edit and delete courses (`ManageCourses`) | ✓ | | | ✓ | |
+
+Without `ApproveTimeOff`, people book time off only for themselves and can withdraw a request while it's still pending. Without `AssignTraining`, they see and update only their own training. Private details (phone and personal email) are shown only to HR and to the person themselves.
+
+### The sample data
+
+Dates are relative to today, so the demo always looks current.
+
+- **People:** 18 people in two teams. Engineering reports to Olivia Bennett, with Evelyn Kim running delivery and managing Henry Silva. Design and QA report to Sophia Lindqvist. Each person has a role, level, location (London, Lisbon, Berlin or remote), start date, manager, work email, phone and personal email. Charlotte Dubois joined six weeks ago and is the newest.
+- **Away today:** Noah Kowalski (vacation), Isabella Rossi (sick) and Benjamin Haddad (paternity leave).
+- **Time off:** six requests are waiting for approval, including Charlotte's. One is declined, and the rest are approved in the past or ahead.
+- **Hiring:** 10 candidates across the board: three in CV screening, two being scheduled, two waiting on interview feedback, one with an offer out, one onboarding and one rejected.
+- **Learning:** 8 courses, of which three are mandatory (welcome, security and respect at work). There are about 75 enrollments, three of them overdue (James O'Connor, Isabella Rossi and Charlotte Dubois).
+- **Projects:** four projects and two sub-projects, with their teams.
+
+### Things to try
+
+- **As the Team Lead,** approve Charlotte's request from Home. Then open a developer's profile and change their location: the private fields are locked.
+- **As the Recruiter,** move a candidate through the board, then create Nora Fitzgerald's employee record from onboarding. She is enrolled in the mandatory courses automatically.
+- **As the Learning Coordinator,** create a course and assign it to the overdue people.
+- **As the Employee,** book time off (it can only be for Charlotte), withdraw it, and log a module on her overdue security course.
+- **As the HR Administrator,** change someone's phone number, or remove a person.
+
+Changes are saved to `localStorage`, so they survive a reload. The refresh button at the bottom of the sidebar restores the original data. Data saved by an older version is upgraded in place, keeping your changes.
+
+### Using a real API
+
+To point the app at a real API instead, set `demo: false` and `apiUrl` in `src/environments/environment*.ts`. The mock API follows the same json-server style routes the services already call (`/employees`, `/employees/:id`, `?firstName_like=`), plus these:
+
+- `POST /api/auth/login`, `POST /api/auth/logout` and `POST /api/auth/register`.
+- `GET /api/auth/session`, which returns the signed-in user and their current permissions. The app calls it at startup, so a role change takes effect without signing out, and an expired session sends you back to sign in.
+- `/courses` and `/enrollments` for learning, filterable by `courseId` and `employeeId`. The API derives each enrollment's `status` and `progress` from `completedModules`.
+
+Every data request needs a bearer token from login.
 
 ## Development server
 

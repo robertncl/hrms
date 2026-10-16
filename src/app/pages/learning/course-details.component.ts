@@ -19,6 +19,7 @@ import { CourseService } from 'src/app/services/course.service';
 import { EnrollmentService } from 'src/app/services/enrollment.service';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AuthService } from 'src/app/services/auth.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { ConfirmationDialogComponent } from 'src/app/shared/components/confirmation-dialog.component';
 import { IconComponent } from 'src/app/shared/components/icon.component';
@@ -53,9 +54,11 @@ const DEFAULT_DUE_DAYS = 30;
               <a class="btn" [routerLink]="['/learning/courses', course.id, 'edit']">Edit</a>
               <button class="btn" type="button" (click)="confirmingDelete.set(true)">Delete</button>
             }
-            <button class="btn btn-primary" type="button" (click)="openAssign()">
-              <app-icon name="plus" /> Assign employees
-            </button>
+            @if (canAssign()) {
+              <button class="btn btn-primary" type="button" (click)="openAssign()">
+                <app-icon name="plus" /> Assign employees
+              </button>
+            }
           </div>
         </div>
 
@@ -89,7 +92,7 @@ const DEFAULT_DUE_DAYS = 30;
         </div>
 
         <section class="enrolled" aria-labelledby="enrolled-title">
-          <h2 id="enrolled-title">Enrolled employees</h2>
+          <h2 id="enrolled-title">{{ canAssign() ? 'Enrolled employees' : 'Your progress' }}</h2>
           <div class="table-wrap">
             <table class="data-table stack">
               <thead>
@@ -102,7 +105,7 @@ const DEFAULT_DUE_DAYS = 30;
                 </tr>
               </thead>
               <tbody>
-                @for (enrollment of enrollments(); track enrollment.id) {
+                @for (enrollment of rows(); track enrollment.id) {
                   <tr>
                     <td>
                       <div class="person">
@@ -134,11 +137,15 @@ const DEFAULT_DUE_DAYS = 30;
                         <button class="btn btn-sm" type="button" [disabled]="busy()"
                           (click)="setModules(enrollment, course.modules.length)">Mark complete</button>
                       }
-                      <button class="btn btn-sm btn-ghost" type="button" [disabled]="busy()" (click)="unenroll(enrollment)">Unenroll</button>
+                      @if (canAssign()) {
+                        <button class="btn btn-sm btn-ghost" type="button" [disabled]="busy()" (click)="unenroll(enrollment)">Unenroll</button>
+                      }
                     </td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="5" class="empty-state">Nobody is enrolled yet. Assign this course to get started.</td></tr>
+                  <tr><td colspan="5" class="empty-state">
+                    {{ canAssign() ? 'Nobody is enrolled yet. Assign this course to get started.' : "You aren't enrolled in this course." }}
+                  </td></tr>
                 }
               </tbody>
             </table>
@@ -264,6 +271,9 @@ export class CourseDetailsComponent {
   /** Route parameter. */
   id = input.required({ transform: numberAttribute });
   canManage = toSignal(inject(PermissionsService).hasPermission('ManageCourses'), { initialValue: false });
+  /** Assigners manage everyone's enrollments; learners only track their own. */
+  canAssign = inject(PermissionsService).can('AssignTraining');
+  private readonly user = inject(AuthService).currentUser;
 
   readonly duration = formatDuration;
   readonly tone = enrollmentTone;
@@ -298,6 +308,12 @@ export class CourseDetailsComponent {
       (a, b) => rank(a) - rank(b) || this.employeeName(a.employeeId).localeCompare(this.employeeName(b.employeeId)),
     );
   });
+  /** The table: everyone for assigners, just your own enrollment otherwise. */
+  rows = computed(() =>
+    this.canAssign()
+      ? this.enrollments()
+      : this.enrollments().filter((e) => e.employeeId === this.user()?.employeeId),
+  );
   completedCount = computed(() => this.enrollments().filter((e) => e.status === 'Completed').length);
   overdueCount = computed(() => this.enrollments().filter((e) => isOverdue(e)).length);
   rate = computed(() => completionRate(this.enrollments()));

@@ -130,4 +130,79 @@ describe('AuthService', () => {
     expect(req.request.body).toEqual({ email: 'jane@example.com', password: 'secret' });
     req.flush({});
   });
+
+  describe('restoreSession', () => {
+    const restore = () => {
+      let done = false;
+      service.restoreSession().subscribe({ complete: () => (done = true) });
+      return () => done;
+    };
+
+    it('should complete straight away without a saved token', () => {
+      const done = restore();
+      httpMock.expectNone('/api/auth/session');
+      expect(done()).toBeTrue();
+    });
+
+    it('should check the saved session with the API and take its current permissions', async () => {
+      const permissions = TestBed.inject(PermissionsService);
+      sessionStorage.setItem('token', 'xyz789');
+      sessionStorage.setItem('user', JSON.stringify({ name: 'Old Name', email: 'j@e.com', role: 'Team Lead' }));
+      sessionStorage.setItem('permissions', JSON.stringify({ ManageCourses: true, ViewEmployees: true }));
+
+      const done = restore();
+      // The saved copy applies at once, before the API answers.
+      expect(service.isAuth$.getValue()).toBeTrue();
+      expect(done()).toBeFalse();
+
+      const req = httpMock.expectOne('/api/auth/session');
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        user: { name: 'Olivia Bennett', email: 'lead@acme.com', role: 'Team Lead', employeeId: 1 },
+        permissions: { ViewEmployees: true, ApproveTimeOff: true },
+      });
+
+      expect(done()).toBeTrue();
+      expect(service.currentUser()).toEqual({ name: 'Olivia Bennett', email: 'lead@acme.com', role: 'Team Lead', employeeId: 1 });
+      expect(await firstValueFrom(permissions.hasPermission('ApproveTimeOff'))).toBeTrue();
+      // Replaced, not merged: a permission the role no longer has is gone.
+      expect(await firstValueFrom(permissions.hasPermission('ManageCourses'))).toBeFalse();
+      expect(JSON.parse(sessionStorage.getItem('permissions')!)).toEqual({ ViewEmployees: true, ApproveTimeOff: true });
+    });
+
+    it('should sign out a session the API no longer recognises', () => {
+      sessionStorage.setItem('token', 'demo-old');
+      sessionStorage.setItem('user', JSON.stringify({ name: 'Sam Rivera', email: 'lead@hrms.demo', role: 'Team Lead' }));
+
+      const done = restore();
+      httpMock.expectOne('/api/auth/session').flush({ message: 'Your session has ended.' }, { status: 401, statusText: 'Unauthorized' });
+
+      expect(done()).toBeTrue();
+      expect(service.isAuth$.getValue()).toBeFalse();
+      expect(service.currentUser()).toBeNull();
+      expect(sessionStorage.getItem('token')).toBeNull();
+    });
+
+    it('should keep the saved session through a network failure', () => {
+      sessionStorage.setItem('token', 'xyz789');
+      sessionStorage.setItem('user', JSON.stringify({ name: 'Jane Doe', email: 'j@e.com', role: 'Employee' }));
+
+      const done = restore();
+      httpMock.expectOne('/api/auth/session').error(new ProgressEvent('error'));
+
+      expect(done()).toBeTrue();
+      expect(service.isAuth$.getValue()).toBeTrue();
+      expect(service.currentUser()?.name).toBe('Jane Doe');
+    });
+  });
+
+  it('should not carry permissions from one sign-in into the next', async () => {
+    const permissions = TestBed.inject(PermissionsService);
+    service.login({ email: 'admin@acme.com', password: 'demo' }).subscribe();
+    httpMock.expectOne('/api/auth/login').flush({ token: 'a', permissions: { DeleteEmployee: true } });
+    service.login({ email: 'employee@acme.com', password: 'demo' }).subscribe();
+    httpMock.expectOne('/api/auth/login').flush({ token: 'b', permissions: { ViewEmployees: true } });
+
+    expect(await firstValueFrom(permissions.hasPermission('DeleteEmployee'))).toBeFalse();
+  });
 });

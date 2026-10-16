@@ -1,4 +1,4 @@
-import { EnvironmentProviders, Provider } from '@angular/core';
+import { EnvironmentProviders, Provider, signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { Course, Enrollment } from 'src/app/infrastructure/types/course';
@@ -7,6 +7,7 @@ import { CourseService } from 'src/app/services/course.service';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { EnrollmentService } from 'src/app/services/enrollment.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AuthService } from 'src/app/services/auth.service';
 import { daysFromToday } from 'src/app/demo/demo-data';
 
 export const testCourses: Course[] = [
@@ -71,10 +72,21 @@ export function createLearningMocks() {
 
 export type LearningMocks = ReturnType<typeof createLearningMocks>;
 
-export function provideLearningTesting(mocks: LearningMocks, canManage = true): (Provider | EnvironmentProviders)[] {
+/**
+ * `canAssign` and `employeeId` describe the viewer: assigners see and manage
+ * everyone's training; learners see only their own (`employeeId`).
+ */
+export function provideLearningTesting(
+  mocks: LearningMocks,
+  canManage = true,
+  canAssign = true,
+  employeeId?: number,
+): (Provider | EnvironmentProviders)[] {
   const permissions = new PermissionsService();
-  permissions.setPermissions({ ManageCourses: canManage });
+  permissions.setPermissions({ ManageCourses: canManage, AssignTraining: canAssign });
+  const currentUser = signal(employeeId ? { name: 'Test Learner', email: '', role: 'Employee', employeeId } : null);
   return [
+    { provide: AuthService, useValue: { currentUser } },
     provideRouter([]),
     { provide: CourseService, useValue: mocks.courseService },
     { provide: EnrollmentService, useValue: mocks.enrollmentService },

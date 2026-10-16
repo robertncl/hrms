@@ -12,8 +12,11 @@ export const employeePermissionsInterceptor: HttpInterceptorFn = (
     if (!req.url.includes('/employees')) {
         return next(req);
     }
+    // Reading People needs only ViewEmployees. Requiring every employee
+    // permission here would leave anyone with a narrower role staring at a
+    // page that never finishes loading; changes are checked where they happen.
     return next(req).pipe(
-        hasPermissions(['CreateEmployee', 'DeleteEmployee', 'EditEmployeeGeneralDetails', 'ViewEmployees']),
+        hasPermissions(['ViewEmployees']),
     );
 };
 

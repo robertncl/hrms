@@ -1,7 +1,7 @@
 import { NgOptimizedImage } from '@angular/common';
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { Subscription, forkJoin } from 'rxjs';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { Project } from 'src/app/infrastructure/types/project';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
@@ -16,6 +16,9 @@ import { Enrollment } from 'src/app/infrastructure/types/course';
 import { enrollmentLabel, enrollmentTone, isOverdue } from '../learning/learning';
 import { clashInfo, dayCount, formatDay, formatRange } from 'src/app/shared/functions/absence';
 import { awayLabels } from './people-table';
+import { AuthService } from 'src/app/services/auth.service';
+import { PermissionsService } from 'src/app/services/permissions.service';
+import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
 
 @Component({
   selector: 'app-employee-details',
@@ -40,14 +43,16 @@ import { awayLabels } from './people-table';
             <span class="status" [class.is-away]="!employee.isAvailable">{{ statusLabel() }}</span>
           </div>
         </div>
-        <div class="page-actions">
-          <a class="btn btn-primary" [routerLink]="['/employees/edit', employee.id]">Edit details</a>
-        </div>
+        @if (canEdit()) {
+          <div class="page-actions">
+            <a class="btn btn-primary" [routerLink]="['/employees/edit', employee.id]">Edit details</a>
+          </div>
+        }
       </div>
 
       <div class="split even">
         <div class="stack">
-          @if (pending(); as request) {
+          @if (canApprove() && pending(); as request) {
             <section class="callout" aria-labelledby="pending-title">
               <div class="callout-body">
                 <strong id="pending-title">
@@ -136,10 +141,62 @@ import { awayLabels } from './people-table';
               <dt>Role</dt><dd>{{ employee.position }}</dd>
               <dt>Level</dt><dd>{{ employee.level }}</dd>
               <dt>Email</dt><dd>{{ employee.email }}</dd>
+              <dt>Location</dt><dd>{{ employee.location || '—' }}</dd>
+              <dt>Started</dt>
+              <dd>
+                @if (employee.startDate) {
+                  {{ longDate(employee.startDate) }} <span class="muted">· {{ tenure(employee.startDate) }}</span>
+                } @else {
+                  —
+                }
+              </dd>
+              <dt>Reports to</dt>
+              <dd>
+                @if (manager(); as manager) {
+                  <a [routerLink]="['/employees/details', manager.id]">{{ manager.firstName }} {{ manager.lastName }}</a>
+                } @else {
+                  —
+                }
+              </dd>
+              @if (reports().length) {
+                <dt>Direct reports</dt>
+                <dd class="reports">
+                  @for (report of reports(); track report.id; let last = $last) {
+                    <a [routerLink]="['/employees/details', report.id]">{{ report.firstName }} {{ report.lastName }}</a>{{ last ? '' : ', ' }}
+                  }
+                </dd>
+              }
               <dt>Status</dt><dd>{{ statusLabel() }}</dd>
               <dt>Employee ID</dt><dd class="num">#{{ employee.id }}</dd>
             </dl>
           </section>
+
+          @if (canSeePrivate()) {
+            <section class="card" aria-labelledby="private-title" aria-describedby="private-note">
+              <h2 id="private-title">Private details</h2>
+              <p id="private-note" class="small muted private-note">
+                {{ isSelf() ? 'Only you and HR see these.' : 'Only HR and ' + employee.firstName + ' see these.' }}
+              </p>
+              <dl class="details-list">
+                <dt>Phone</dt>
+                <dd>
+                  @if (employee.phone) {
+                    <a [href]="'tel:' + employee.phone.replaceAll(' ', '')">{{ employee.phone }}</a>
+                  } @else {
+                    —
+                  }
+                </dd>
+                <dt>Personal email</dt>
+                <dd>
+                  @if (employee.personalEmail) {
+                    <a [href]="'mailto:' + employee.personalEmail">{{ employee.personalEmail }}</a>
+                  } @else {
+                    —
+                  }
+                </dd>
+              </dl>
+            </section>
+          }
 
           <section class="card" aria-labelledby="timeoff-title">
             <div class="card-header">
@@ -156,7 +213,7 @@ import { awayLabels } from './people-table';
                     </div>
                     <span class="badge" [class.badge-selected]="request.status === 'Pending'"
                       [class.badge-critical]="request.status === 'Rejected'">
-                      {{ request.status === 'Pending' ? 'Waiting on you' : request.status }}
+                      {{ request.status === 'Pending' ? (canApprove() ? 'Waiting on you' : 'Waiting for approval') : request.status }}
                     </span>
                   </div>
                 }
@@ -233,6 +290,8 @@ import { awayLabels } from './people-table';
     .l-body { display: grid; min-width: 0; }
     .l-body a { font-weight: 600; text-decoration: none; }
     .learning-row .badge { justify-self: start; }
+    .reports a { white-space: nowrap; }
+    .private-note { margin: calc(-1 * var(--acme-space-2)) 0 var(--acme-space-4); }
 
     @media (max-width: 560px) {
       .learning-row { grid-template-columns: minmax(0, 1fr); }
@@ -242,7 +301,25 @@ import { awayLabels } from './people-table';
   imports: [NgOptimizedImage, RouterLink, AvatarComponent, ProgressMeterComponent],
 })
 export class EmployeeDetailsComponent implements OnInit {
-  @Input() employee!: Employee;
+  private readonly person = signal<Employee | undefined>(undefined);
+  private initialized = false;
+  private loading?: Subscription;
+
+  /**
+   * Route data. Moving from one profile to another (say, from "Reports to")
+   * reuses this component, so every new person triggers a fresh load.
+   */
+  @Input() set employee(value: Employee) {
+    const previous = this.person();
+    this.person.set(value);
+    if (this.initialized && value.id !== previous?.id) {
+      this.loaded.set(false);
+      this.load();
+    }
+  }
+  get employee(): Employee {
+    return this.person()!;
+  }
 
   private readonly projectService = inject(ProjectService);
   private readonly employeeService = inject(EmployeeService);
@@ -250,9 +327,21 @@ export class EmployeeDetailsComponent implements OnInit {
   private readonly courseService = inject(CourseService);
   private readonly enrollmentService = inject(EnrollmentService);
 
+  private readonly permissions = inject(PermissionsService);
+  private readonly user = inject(AuthService).currentUser;
+
   formatRange = formatRange;
   tone = enrollmentTone;
   courseStatus = enrollmentLabel;
+  longDate = formatLongDate;
+  tenure = (startDate: string) => tenure(startDate);
+
+  canEdit = this.permissions.can('EditEmployeeGeneralDetails');
+  canApprove = this.permissions.can('ApproveTimeOff');
+  private readonly canSeeAllPrivate = this.permissions.can('EditEmployeePrivateDetails');
+  /** Private details are for HR and for the person themselves. */
+  isSelf = computed(() => this.user()?.employeeId === this.employee?.id);
+  canSeePrivate = computed(() => this.canSeeAllPrivate() || this.isSelf());
 
   projects = signal<Project[]>([]);
   loaded = signal(false);
@@ -280,6 +369,14 @@ export class EmployeeDetailsComponent implements OnInit {
 
   pending = computed(() => this.history().find((request) => request.status === 'Pending'));
 
+  manager = computed(() => this.colleagues().find((person) => person.id === this.employee.managerId));
+  /** Who reports to this person, by name. */
+  reports = computed(() =>
+    this.colleagues()
+      .filter((person) => person.managerId === this.employee.id)
+      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)),
+  );
+
   /** Cover impact for the pending request, so it is decidable right here. */
   impact = computed(() => {
     const request = this.pending();
@@ -287,11 +384,13 @@ export class EmployeeDetailsComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.initialized = true;
     this.load();
   }
 
   private load() {
-    forkJoin({
+    this.loading?.unsubscribe();
+    this.loading = forkJoin({
       projects: this.projectService.getProjectsByEmployeeId(this.employee.id),
       employees: this.employeeService.getEmployees(),
       requests: this.timeOffRequestService.getRequests(),

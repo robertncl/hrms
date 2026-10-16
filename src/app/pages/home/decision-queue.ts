@@ -14,6 +14,17 @@ import {
 
 export type QueueKind = 'all' | 'timeoff' | 'hiring' | 'training';
 
+/** Who the queue is for: it lists only what they can act on. */
+export type QueueViewer = {
+  canApprove: boolean;
+  canHire: boolean;
+  canAssign: boolean;
+  /** Their own People record; without assign rights they see only their own training. */
+  employeeId?: number;
+};
+
+export const EVERYTHING: QueueViewer = { canApprove: true, canHire: true, canAssign: true };
+
 /** One thing waiting on the signed-in user, from either side of the app. */
 export type QueueItem = {
   id: string;
@@ -160,6 +171,9 @@ function trainingItems(
  * The Home queue: pending time off first (it has a deadline), then hiring
  * steps that are blocking someone else. Urgent items float to the top of
  * their group.
+ *
+ * Each viewer sees only what their role can act on, so the queue never offers
+ * an approval the API would refuse.
  */
 export function buildDecisionQueue(
   requests: TimeOffRequest[],
@@ -167,12 +181,14 @@ export function buildDecisionQueue(
   employees: Employee[],
   enrollments: Enrollment[] = [],
   courses: Course[] = [],
+  viewer: QueueViewer = EVERYTHING,
   today = new Date(),
 ): QueueItem[] {
+  const ownTraining = enrollments.filter((e) => e.employeeId === viewer.employeeId);
   const items = [
-    ...timeOffItems(requests, employees, today),
-    ...hiringItems(candidates, employees, today),
-    ...trainingItems(enrollments, courses, employees),
+    ...(viewer.canApprove ? timeOffItems(requests, employees, today) : []),
+    ...(viewer.canHire ? hiringItems(candidates, employees, today) : []),
+    ...trainingItems(viewer.canAssign ? enrollments : ownTraining, courses, employees),
   ];
   return items.sort((a, b) => Number(b.urgent) - Number(a.urgent));
 }

@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { BehaviorSubject, forkJoin, switchMap } from 'rxjs';
+import { BehaviorSubject, forkJoin, of, switchMap } from 'rxjs';
 import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
@@ -10,11 +10,12 @@ import { CourseService } from '../services/course.service';
 import { EnrollmentService } from '../services/enrollment.service';
 import { completionRate, isOverdue } from './learning/learning';
 import { AuthService } from '../services/auth.service';
+import { PermissionsService } from '../services/permissions.service';
 import { Employee } from '../infrastructure/types/employee';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { AvatarComponent } from '../shared/components/avatar.component';
 import { candidateStage } from '../shared/functions/status-badge';
-import { QueueKind, buildDecisionQueue, countByKind } from './home/decision-queue';
+import { QueueKind, QueueViewer, buildDecisionQueue, countByKind } from './home/decision-queue';
 import { WeekBar, nextWeekBars, nextWeekDays, nextWeekRange } from './home/week-strip';
 
 const POSITIONS: Employee['position'][] = ['Developer', 'Designer', 'QA', 'Manager'];
@@ -32,10 +33,16 @@ const VISIBLE_QUEUE = 6;
           <h1>{{ greeting() }}</h1>
           <p>{{ summary() }}</p>
         </div>
-        <div class="page-actions">
-          <a class="btn" routerLink="/work/time-off">Request time off</a>
-          <a class="btn btn-primary" routerLink="/employees/create">Add person</a>
-        </div>
+        @if (canRequestTimeOff() || canAddPeople()) {
+          <div class="page-actions">
+            @if (canRequestTimeOff()) {
+              <a class="btn" routerLink="/work/time-off">Request time off</a>
+            }
+            @if (canAddPeople()) {
+              <a class="btn btn-primary" routerLink="/employees/create">Add person</a>
+            }
+          </div>
+        }
       </div>
 
       @if (data(); as data) {
@@ -110,7 +117,7 @@ const VISIBLE_QUEUE = 6;
                 </div>
                 <div class="legend">
                   <span><span class="swatch"></span>Approved</span>
-                  <span><span class="swatch is-pending"></span>Waiting on you</span>
+                  <span><span class="swatch is-pending"></span>{{ canApprove() ? 'Waiting on you' : 'Waiting for approval' }}</span>
                 </div>
               } @else {
                 <p class="empty-state">Everyone is in next week.</p>
@@ -137,20 +144,22 @@ const VISIBLE_QUEUE = 6;
               </div>
             </section>
 
-            <section class="card" aria-labelledby="pipeline-title">
-              <div class="card-header">
-                <h2 id="pipeline-title">Hiring</h2>
-                <a class="small" routerLink="/recruitment">Open board</a>
-              </div>
-              <ol class="pipeline">
-                @for (stage of pipeline(); track stage.label) {
-                  <li>
-                    <strong>{{ stage.value }}</strong>
-                    <span>{{ stage.label }}</span>
-                  </li>
-                }
-              </ol>
-            </section>
+            @if (canHire()) {
+              <section class="card" aria-labelledby="pipeline-title">
+                <div class="card-header">
+                  <h2 id="pipeline-title">Hiring</h2>
+                  <a class="small" routerLink="/recruitment">Open board</a>
+                </div>
+                <ol class="pipeline">
+                  @for (stage of pipeline(); track stage.label) {
+                    <li>
+                      <strong>{{ stage.value }}</strong>
+                      <span>{{ stage.label }}</span>
+                    </li>
+                  }
+                </ol>
+              </section>
+            }
           </div>
         </div>
       } @else {
@@ -231,6 +240,21 @@ export class DashboardComponent {
   private readonly courseService = inject(CourseService);
   private readonly enrollmentService = inject(EnrollmentService);
   private readonly user = inject(AuthService).currentUser;
+  private readonly permissions = inject(PermissionsService);
+
+  canApprove = this.permissions.can('ApproveTimeOff');
+  canHire = this.permissions.can('ManageHiring');
+  private readonly canAssign = this.permissions.can('AssignTraining');
+  canAddPeople = this.permissions.can('CreateEmployee');
+  /** Approvers book for anyone; everyone else only for themselves. */
+  canRequestTimeOff = computed(() => this.canApprove() || this.user()?.employeeId !== undefined);
+
+  private readonly viewer = computed<QueueViewer>(() => ({
+    canApprove: this.canApprove(),
+    canHire: this.canHire(),
+    canAssign: this.canAssign(),
+    employeeId: this.user()?.employeeId,
+  }));
 
   readonly today = new Date();
   readonly weekDays = nextWeekDays();
@@ -246,7 +270,8 @@ export class DashboardComponent {
         forkJoin({
           employees: this.employeeService.getEmployees(),
           requests: this.timeOffRequestService.getRequests(),
-          candidates: this.candidateService.getCandidates(),
+          // Only hiring roles may read candidates.
+          candidates: this.canHire() ? this.candidateService.getCandidates() : of([]),
           enrollments: this.enrollmentService.getEnrollments(),
           courses: this.courseService.getCourses(),
         }),
@@ -277,6 +302,7 @@ export class DashboardComponent {
       this.employees(),
       this.enrollments(),
       this.courses(),
+      this.viewer(),
     ),
   );
 
@@ -284,12 +310,14 @@ export class DashboardComponent {
 
   tabs = computed(() => {
     const counts = this.counts();
+    // A tab for each kind of decision this role can make.
     return [
-      { kind: 'all' as QueueKind, label: 'All', count: counts.all },
-      { kind: 'timeoff' as QueueKind, label: 'Time off', count: counts.timeoff },
-      { kind: 'hiring' as QueueKind, label: 'Hiring', count: counts.hiring },
-      { kind: 'training' as QueueKind, label: 'Training', count: counts.training },
-    ];
+      { kind: 'all' as QueueKind, label: 'All', count: counts.all, shown: true },
+      { kind: 'timeoff' as QueueKind, label: 'Time off', count: counts.timeoff, shown: this.canApprove() },
+      { kind: 'hiring' as QueueKind, label: 'Hiring', count: counts.hiring, shown: this.canHire() },
+      // Training items are either everyone's (assigners) or your own (if you have a People record).
+      { kind: 'training' as QueueKind, label: 'Training', count: counts.training, shown: this.canAssign() || this.viewer().employeeId !== undefined },
+    ].filter((tab) => tab.shown);
   });
 
   filteredQueue = computed(() => {

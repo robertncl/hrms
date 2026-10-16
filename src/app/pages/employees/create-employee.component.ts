@@ -1,10 +1,10 @@
 import { Component, inject, signal } from '@angular/core';
-import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { EmployeeForm } from 'src/app/infrastructure/types/employee-form';
 import { EmployeeService, NewEmployee } from 'src/app/services/employee.service';
-import { workEmail } from 'src/app/demo/demo-data';
-import { EmployeeFormFieldsComponent } from './employee-form-fields.component';
+import { daysFromToday, workEmail } from 'src/app/demo/demo-data';
+import { EmployeeFormFieldsComponent, createEmployeeForm } from './employee-form-fields.component';
 
 @Component({
   selector: 'app-create-employee',
@@ -24,7 +24,7 @@ import { EmployeeFormFieldsComponent } from './employee-form-fields.component';
           </div>
         </div>
 
-        <app-employee-form-fields [form]="form" [emailHint]="emailHint()" />
+        <app-employee-form-fields [form]="form" [emailHint]="emailHint()" [people]="people()" />
 
         @if (error()) {
           <p class="alert alert-error" role="alert">{{ error() }}</p>
@@ -58,17 +58,16 @@ export class CreateEmployeeComponent {
   /** Tracks whether the work email was typed, so autofill stops interfering. */
   private emailEdited = false;
 
-  form = new FormGroup<EmployeeForm>({
-    firstName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    lastName: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    email: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] }),
-    position: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-    level: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
-  });
+  form = createEmployeeForm();
+  /** For the "Reports to" picker. */
+  people = toSignal(this.employeeService.getEmployees(), { initialValue: [] });
 
   emailHint = signal('Format: name@acme.com');
 
   constructor() {
+    // New people usually start today; it is the date most often left alone.
+    this.form.controls.startDate.setValue(daysFromToday(0));
+
     // Work emails follow from the name here, so fill one in and say so —
     // but never overwrite an address somebody has typed themselves.
     this.form.controls.email.valueChanges.subscribe(() => {
@@ -96,7 +95,11 @@ export class CreateEmployeeComponent {
     }
     this.saving.set(true);
     this.error.set('');
-    this.employeeService.createEmployee(this.form.value as NewEmployee).subscribe({
+    // Leave optional fields out rather than storing empty strings.
+    const value = Object.fromEntries(
+      Object.entries(this.form.getRawValue()).filter(([, v]) => v !== '' && v !== null),
+    ) as NewEmployee;
+    this.employeeService.createEmployee(value).subscribe({
       next: (employee) => this.router.navigate(['/employees/details', employee.id]),
       error: () => {
         this.saving.set(false);

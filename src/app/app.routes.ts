@@ -3,6 +3,7 @@ import { LoginComponent } from './pages/login.component';
 import { ShellComponent } from './layout/shell.component';
 import { InfoPageComponent } from './pages/info-page.component';
 import { authGuard, guestGuard } from './shared/guards/auth.guard';
+import { permissionGuard } from './shared/guards/permission.guard';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [guestGuard], title: 'Sign in' },
@@ -37,6 +38,7 @@ export const routes: Routes = [
       },
       {
         path: 'recruitment',
+        canActivate: [permissionGuard('ManageHiring', '/dashboard')],
         loadChildren: () => {
           return import('./pages/recruitment/recruitment.routes').then((m) => m.routes);
         },

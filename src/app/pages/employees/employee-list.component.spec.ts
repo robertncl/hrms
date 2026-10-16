@@ -10,6 +10,8 @@ import { ProjectService } from 'src/app/services/project.service';
 import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { imageLoader } from 'src/app/app.config';
+import { grantRole } from 'src/testing/roles';
+import { DemoRole } from 'src/app/demo/demo-data';
 
 describe('EmployeeListComponent', () => {
   let component: EmployeeListComponent;
@@ -73,10 +75,16 @@ describe('EmployeeListComponent', () => {
       ],
     }).compileComponents();
 
+    render('HR Administrator');
+  });
+
+  const render = (role: DemoRole) => {
+    grantRole(role);
     fixture = TestBed.createComponent(EmployeeListComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-  });
+  };
+  const el = () => fixture.nativeElement as HTMLElement;
 
   it('should create', () => {
     expect(component).toBeTruthy();
@@ -177,5 +185,34 @@ describe('EmployeeListComponent', () => {
     expect(dialog).toBeTruthy();
     expect(dialog.textContent).toContain('Remove John Doe?');
     expect(dialog.textContent).toContain("You can't undo it");
+  });
+
+  describe('by role', () => {
+    const rowControls = () => Array.from(el().querySelectorAll('tbody tr:first-child td.actions .visually-hidden'))
+      .map((label) => label.textContent!.split(' ')[0]);
+
+    it('should give HR every control', () => {
+      expect(el().textContent).toContain('Add person');
+      expect(rowControls()).toEqual(['Edit', 'Remove']);
+    });
+
+    it('should let a team lead edit but not add or remove people', () => {
+      render('Team Lead');
+      expect(el().querySelector('a[href="/employees/create"]')).toBeNull();
+      expect(rowControls()).toEqual(['Edit']);
+    });
+
+    it('should let a recruiter add people but not edit or remove them', () => {
+      render('Recruiter');
+      expect(el().querySelector('a[href="/employees/create"]')).not.toBeNull();
+      expect(rowControls()).toEqual([]);
+    });
+
+    it('should leave an employee with a read-only directory they can still export', () => {
+      render('Employee');
+      expect(el().querySelector('a[href="/employees/create"]')).toBeNull();
+      expect(rowControls()).toEqual([]);
+      expect(el().textContent).toContain('Export CSV');
+    });
   });
 });
