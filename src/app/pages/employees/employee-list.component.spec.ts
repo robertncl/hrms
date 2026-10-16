@@ -6,6 +6,8 @@ import { of } from 'rxjs';
 import { ConfirmationDialogComponent } from 'src/app/shared/components/confirmation-dialog.component';
 import { EmployeeListComponent } from './employee-list.component';
 import { EmployeeService } from 'src/app/services/employee.service';
+import { ProjectService } from 'src/app/services/project.service';
+import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { imageLoader } from 'src/app/app.config';
 
@@ -50,6 +52,23 @@ describe('EmployeeListComponent', () => {
       providers: [
         provideRouter([]),
         { provide: EmployeeService, useValue: mockEmployeeService },
+        {
+          provide: ProjectService,
+          useValue: {
+            getProjects: () => of([
+              { id: 1, name: 'Hadron', description: '', image: '', employees: [1], subProjectIds: [] },
+            ]),
+          },
+        },
+        {
+          provide: TimeOffRequestService,
+          useValue: {
+            getRequests: () => of([
+              // Jane is signed off across today, so her row says why.
+              { id: 1, employeeId: 2, startDate: '2000-01-01', endDate: '2099-12-31', type: 'Vacation', status: 'Approved' },
+            ]),
+          },
+        },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],
     }).compileComponents();
@@ -73,10 +92,11 @@ describe('EmployeeListComponent', () => {
     expect(component.confirmDialog).toBeNull();
   });
 
-  it('should invoke showConfirmationDialog when the delete button is clicked', () => {
+  it('should invoke showConfirmationDialog when the remove button is clicked', () => {
     spyOn(component, 'showConfirmationDialog');
-    const deleteButton: HTMLButtonElement = fixture.debugElement.nativeElement.querySelector('button');
-    deleteButton.click();
+    const removeButton: HTMLButtonElement =
+      fixture.debugElement.nativeElement.querySelector('tbody td.actions button');
+    removeButton.click();
 
     expect(component.showConfirmationDialog).toHaveBeenCalled();
   });
@@ -110,10 +130,23 @@ describe('EmployeeListComponent', () => {
     expect(rowNames()).toEqual(['Jane Smith']);
   });
 
-  it('should show availability as a labelled badge', () => {
-    const badges = Array.from(fixture.debugElement.nativeElement.querySelectorAll('tbody .badge') as NodeListOf<HTMLElement>)
-      .map((b) => b.textContent!.trim());
-    expect(badges).toEqual(['Available', 'On leave']);
+  it('should show availability as a labelled status, never colour alone', () => {
+    const statuses = Array.from(
+      fixture.debugElement.nativeElement.querySelectorAll('tbody .status') as NodeListOf<HTMLElement>,
+    ).map((s) => s.textContent!.trim());
+    expect(statuses).toEqual(['In today', 'Vacation until 31 Dec']);
+  });
+
+  it('should list the projects somebody is on', () => {
+    const cells = fixture.debugElement.nativeElement.querySelectorAll('tbody .projects');
+    expect(cells[0].textContent.trim()).toBe('Hadron');
+    expect(cells[1].textContent.trim()).toBe('—');
+  });
+
+  it('should filter to only the people who are away', () => {
+    component.setAwayOnly(true);
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['Jane Smith']);
   });
 
   it('should delete the employee and reload the list once confirmed', async () => {
@@ -142,6 +175,7 @@ describe('EmployeeListComponent', () => {
 
     const dialog: HTMLDialogElement = fixture.nativeElement.querySelector('app-confirmation-dialog dialog');
     expect(dialog).toBeTruthy();
-    expect(dialog.textContent).toContain('John Doe will be removed');
+    expect(dialog.textContent).toContain('Remove John Doe?');
+    expect(dialog.textContent).toContain("You can't undo it");
   });
 });

@@ -83,80 +83,96 @@ describe('TimeOffManagementComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display the count of requests per status', () => {
-    const text = fixture.debugElement.nativeElement.textContent;
-    expect(text).toContain('1 pending');
-    expect(text).toContain('1 approved');
-    expect(text).toContain('0 rejected');
+  function rows(): HTMLElement[] {
+    return Array.from(fixture.debugElement.nativeElement.querySelectorAll('.queue-row'));
+  }
+
+  function tabLabels(): string[] {
+    return Array.from(
+      fixture.debugElement.nativeElement.querySelectorAll('.tabs .tab') as NodeListOf<HTMLElement>,
+    ).map((t) => t.textContent!.replace(/\s+/g, ' ').trim());
+  }
+
+  function buttonsIn(row: HTMLElement): string[] {
+    return Array.from(row.querySelectorAll('button')).map((b) => b.textContent!.trim());
+  }
+
+  it('should count requests per status across the tabs', () => {
+    expect(tabLabels()).toEqual(['Waiting · 1', 'Approved · 1', 'Declined · 0']);
+  });
+
+  it('should open on the waiting tab', () => {
+    expect(component.status()).toBe('Pending');
+    expect(rows().length).toBe(1);
+    expect(rows()[0].textContent).toContain('Ada Lovelace');
   });
 
   it('should show employee names, falling back to the id when unknown', () => {
-    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
-    expect(rows[0].textContent).toContain('Ada Lovelace');
-    expect(rows[1].textContent).toContain('Employee #11');
+    expect(rows()[0].textContent).toContain('Ada Lovelace');
+
+    component.status.set('Approved');
+    fixture.detectChanges();
+    expect(rows()[0].textContent).toContain('Employee #11');
   });
 
-  it('should render a table row for each request', () => {
-    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
-    expect(rows.length).toBe(2);
+  it('should offer Approve and Decline on waiting requests only', () => {
+    expect(buttonsIn(rows()[0])).toEqual(['Decline', 'Approve']);
+
+    component.status.set('Approved');
+    fixture.detectChanges();
+    expect(buttonsIn(rows()[0])).toEqual(['Delete']);
   });
 
-  it('should show Approve and Reject buttons only for pending requests', () => {
-    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
-    const pendingRow = rows[0] as HTMLElement;
-    const approvedRow = rows[1] as HTMLElement;
-
-    const pendingButtons = Array.from(pendingRow.querySelectorAll('button')).map((b) => b.textContent?.trim());
-    expect(pendingButtons).toContain('Approve');
-    expect(pendingButtons).toContain('Reject');
-    expect(pendingButtons).toContain('Delete');
-
-    const approvedButtons = Array.from(approvedRow.querySelectorAll('button')).map((b) => b.textContent?.trim());
-    expect(approvedButtons).not.toContain('Approve');
-    expect(approvedButtons).not.toContain('Reject');
-    expect(approvedButtons).toContain('Delete');
-  });
-
-  it('should call approveRequest on the service when Approve is clicked', () => {
-    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
-    const approveButton = Array.from(rows[0].querySelectorAll('button')).find(
-      (b: any) => b.textContent.trim() === 'Approve'
-    ) as HTMLButtonElement;
-
-    approveButton.click();
+  it('should call approveRequest when Approve is clicked', () => {
+    const approve = Array.from(rows()[0].querySelectorAll('button'))
+      .find((b) => b.textContent!.trim() === 'Approve')!;
+    approve.click();
 
     expect(mockTimeOffsService.approveRequest).toHaveBeenCalledWith(mockRequests[0]);
   });
 
-  it('should call rejectRequest on the service when Reject is clicked', () => {
-    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
-    const rejectButton = Array.from(rows[0].querySelectorAll('button')).find(
-      (b: any) => b.textContent.trim() === 'Reject'
-    ) as HTMLButtonElement;
-
-    rejectButton.click();
+  it('should call rejectRequest when Decline is clicked', () => {
+    const decline = Array.from(rows()[0].querySelectorAll('button'))
+      .find((b) => b.textContent!.trim() === 'Decline')!;
+    decline.click();
 
     expect(mockTimeOffsService.rejectRequest).toHaveBeenCalledWith(mockRequests[0]);
   });
 
-  it('should call deleteRequest on the service when Delete is clicked', () => {
-    const rows = fixture.debugElement.nativeElement.querySelectorAll('tbody tr');
-    const deleteButton = Array.from(rows[1].querySelectorAll('button')).find(
-      (b: any) => b.textContent.trim() === 'Delete'
-    ) as HTMLButtonElement;
+  it('should call deleteRequest when Delete is clicked on a resolved request', () => {
+    component.status.set('Approved');
+    fixture.detectChanges();
 
-    deleteButton.click();
+    const remove = Array.from(rows()[0].querySelectorAll('button'))
+      .find((b) => b.textContent!.trim() === 'Delete')!;
+    remove.click();
 
     expect(mockTimeOffsService.deleteRequest).toHaveBeenCalledWith(mockRequests[1]);
   });
 
-  it('should update the selectedType signal when the filter select changes', () => {
-    const select: HTMLSelectElement = fixture.debugElement.nativeElement.querySelector('select');
-    select.value = select.options[1].value;
-    select.dispatchEvent(new Event('change'));
+  it('should report the cover impact next to each waiting request', () => {
+    // Ada is the only Developer, so nothing collides with her request.
+    expect(rows()[0].textContent).toContain('No clashes');
+  });
+
+  it('should bulk-approve every waiting request with no clash', () => {
+    const bulk = Array.from(
+      fixture.debugElement.nativeElement.querySelectorAll('.tabs button') as NodeListOf<HTMLButtonElement>,
+    ).find((b) => b.textContent!.includes('with no clashes'))!;
+    expect(bulk.textContent).toContain('Approve 1 with no clashes');
+
+    bulk.click();
+    expect(mockTimeOffsService.approveRequest).toHaveBeenCalledWith(mockRequests[0]);
+  });
+
+  it('should show an empty state on a tab with nothing in it', () => {
+    component.status.set('Rejected');
     fixture.detectChanges();
 
-    expect(selectedTypeSignal()).toBe('Vacation');
+    expect(rows().length).toBe(0);
+    // Scoped to the queue card: the timeline above has an empty state too.
+    const queue = fixture.debugElement.nativeElement.querySelector('[aria-labelledby="queue-title"]');
+    expect(queue.querySelector('.empty-state').textContent).toContain('Nothing declined');
   });
 
   it('should submit a new request from the dialog', () => {

@@ -31,24 +31,24 @@ export const DEMO_PASSWORD = 'demo';
 export const DEMO_ACCOUNTS: DemoAccount[] = [
     {
         name: 'Alex Morgan',
-        email: 'admin@hrms.demo',
+        email: 'admin@acme.com',
         role: 'HR Administrator',
         password: DEMO_PASSWORD,
         permissions: ALL_PERMISSIONS,
     },
     {
         name: 'Sam Rivera',
-        email: 'lead@hrms.demo',
+        email: 'lead@acme.com',
         role: 'Team Lead',
         password: DEMO_PASSWORD,
         permissions: { ...ALL_PERMISSIONS, EditEmployeePrivateDetails: false },
     },
 ];
 
-/** Company email from a person's name, e.g. "James O'Connor" -> james.oconnor@hrms.demo. */
+/** Company email from a person's name, e.g. "James O'Connor" -> james.oconnor@acme.com. */
 export function workEmail(firstName: string, lastName: string): string {
     const slug = (part: string) => part.normalize('NFD').replace(/[^a-zA-Z]/g, '').toLowerCase();
-    return `${slug(firstName)}.${slug(lastName)}@hrms.demo`;
+    return `${slug(firstName)}.${slug(lastName)}@acme.com`;
 }
 
 /** ISO date (yyyy-mm-dd) `offset` days from today, so the demo always looks current. */

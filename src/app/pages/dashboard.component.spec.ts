@@ -64,34 +64,51 @@ describe('DashboardComponent', () => {
     expect(fixture.nativeElement.querySelector('h1').textContent).toMatch(/Good (morning|afternoon|evening), Alex/);
   });
 
-  it('should show the key figures', () => {
-    const values = Array.from(fixture.nativeElement.querySelectorAll('.stat') as NodeListOf<HTMLElement>).map((stat) => [
-      stat.querySelector('.stat-label')!.textContent!.trim(),
-      stat.querySelector('.stat-value')!.textContent!.trim(),
-    ]);
-    expect(values).toEqual([
-      ['Headcount', '3'],
-      ['Away today', '1'],
-      ['Pending requests', '1'],
-      ['Active candidates', '3'],
-    ]);
+  it('should list what needs a decision, with its cover impact', () => {
+    const rows = fixture.nativeElement.querySelectorAll('.row-item');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('First1 Last1');
+    expect(rows[0].textContent).toContain('Vacation');
+    // The only other Developer is out on different days, so nothing collides.
+    expect(rows[0].textContent).toContain('No clashes');
   });
 
-  it('should only list approved absences in the next two weeks', () => {
-    expect(text()).toContain('First2 Last2');
-    expect(fixture.nativeElement.querySelectorAll('section.card')[1].textContent).not.toContain('First3 Last3');
+  it('should flag a request that starts within a few days', () => {
+    const badge = fixture.nativeElement.querySelector('.row-item .badge');
+    expect(badge.textContent).toContain('Starts in 3 days');
+    expect(badge.classList).toContain('badge-critical');
   });
 
-  it('should chart headcount by position', () => {
-    const bars = fixture.nativeElement.querySelectorAll('section.card')[2].querySelectorAll('li');
-    expect(Array.from(bars as NodeListOf<HTMLElement>).map((li) => `${li.querySelector('.label')!.textContent!.trim()} ${li.querySelector('.value')!.textContent!.trim()}`))
-      .toEqual(['Developer 2', 'Designer 0', 'QA 1', 'Manager 0']);
+  it('should split the queue by kind', () => {
+    const chips = Array.from(fixture.nativeElement.querySelectorAll('.chips .chip') as NodeListOf<HTMLElement>)
+      .map((c) => c.textContent!.replace(/\s+/g, ' ').trim());
+    expect(chips).toEqual(['All 1', 'Time off 1', 'Hiring 0']);
+  });
+
+  it('should show who is out next week, marking what is still pending', () => {
+    const bars = fixture.nativeElement.querySelectorAll('.timeline.week .t-bar');
+    expect(bars.length).toBe(1);
+    expect(bars[0].textContent).toContain('Pending');
+    expect(bars[0].classList).toContain('is-pending');
+  });
+
+  it('should break headcount down by position, highlighting the largest', () => {
+    const labels = Array.from(fixture.nativeElement.querySelectorAll('.bars .b-label') as NodeListOf<HTMLElement>)
+      .map((l) => l.textContent!.trim());
+    const values = Array.from(fixture.nativeElement.querySelectorAll('.bars .b-value') as NodeListOf<HTMLElement>)
+      .map((v) => v.textContent!.trim());
+    expect(labels).toEqual(['Developer', 'Designer', 'QA', 'Manager']);
+    expect(values).toEqual(['2', '0', '1', '0']);
+
+    // Cobalt marks exactly one takeaway: the biggest group.
+    const highlighted = fixture.nativeElement.querySelectorAll('.bars .meter > .is-highlight');
+    expect(highlighted.length).toBe(1);
   });
 
   it('should count candidates per pipeline stage', () => {
-    const bars = fixture.nativeElement.querySelectorAll('section.card')[3].querySelectorAll('li');
-    expect(Array.from(bars as NodeListOf<HTMLElement>).map((li) => `${li.querySelector('.label')!.textContent!.trim()} ${li.querySelector('.value')!.textContent!.trim()}`))
-      .toEqual(['CV evaluation 2', 'Interview preparation 0', 'Interview Feedback 0', 'Offer sent 0', 'Onboarding 1']);
+    const cells = Array.from(fixture.nativeElement.querySelectorAll('.pipeline li') as NodeListOf<HTMLElement>)
+      .map((li) => `${li.querySelector('span')!.textContent!.trim()} ${li.querySelector('strong')!.textContent!.trim()}`);
+    expect(cells).toEqual(['New 2', 'Interview 0', 'Feedback 0', 'Offer 0', 'Onboarding 1']);
   });
 
   it('should approve a pending request and reload the figures', () => {

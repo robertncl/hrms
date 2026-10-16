@@ -39,9 +39,9 @@ describe('LoginComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should show a warning when email or password is missing', () => {
-    const warning = fixture.debugElement.nativeElement.querySelector('.warning');
-    expect(warning).toBeTruthy();
+  it('should keep the submit button disabled while a field is empty', () => {
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('button[type="submit"]');
+    expect(button.disabled).toBeTrue();
   });
 
   it('should not call authService.login when fields are empty', () => {
@@ -61,11 +61,11 @@ describe('LoginComponent', () => {
     expect(mockAuthService.login).toHaveBeenCalledWith(component.credentials);
   });
 
-  it('should hide the warning once both fields are filled', () => {
+  it('should enable the submit button once both fields are filled', () => {
     component.credentials = { email: 'user@example.com', password: 'secret' };
     fixture.detectChanges();
-    const warning = fixture.debugElement.nativeElement.querySelector('.warning');
-    expect(warning).toBeFalsy();
+    const button: HTMLButtonElement = fixture.nativeElement.querySelector('button[type="submit"]');
+    expect(button.disabled).toBeFalse();
   });
 
   it('should update credentials when the inputs change', () => {
@@ -101,11 +101,14 @@ describe('LoginComponent', () => {
   });
 
   it('should fill in a demo account', () => {
-    component.useAccount('admin@hrms.demo');
-    expect(component.credentials).toEqual({ email: 'admin@hrms.demo', password: 'demo' });
+    component.useAccount('admin@acme.com');
+    expect(component.credentials).toEqual({ email: 'admin@acme.com', password: 'demo' });
   });
 
-  it('should submit when the Login button is clicked', () => {
+  it('should submit when the sign-in button is clicked', () => {
+    // The button only accepts a click once both fields are filled.
+    component.credentials = { email: 'user@example.com', password: 'secret' };
+    fixture.detectChanges();
     spyOn(component, 'submit');
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     expect(component.submit).toHaveBeenCalled();

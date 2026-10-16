@@ -5,6 +5,8 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { EmployeeDetailsComponent } from './employee-details.component';
 import { ProjectService } from 'src/app/services/project.service';
+import { EmployeeService } from 'src/app/services/employee.service';
+import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { Project } from 'src/app/infrastructure/types/project';
 import { imageLoader } from 'src/app/app.config';
@@ -45,6 +47,8 @@ describe('EmployeeDetailsComponent', () => {
       providers: [
         provideRouter([]),
         { provide: ProjectService, useValue: mockProjectService },
+        { provide: EmployeeService, useValue: { getEmployees: () => of([mockEmployee]) } },
+        { provide: TimeOffRequestService, useValue: { getRequests: () => of([]) } },
         { provide: IMAGE_LOADER, useValue: imageLoader },
       ],
     }).compileComponents();
@@ -70,8 +74,14 @@ describe('EmployeeDetailsComponent', () => {
     expect(text).toContain(mockEmployee.position);
   });
 
-  it('should render a project card per project returned by the service', () => {
-    const cards = fixture.debugElement.nativeElement.querySelectorAll('app-project-card');
-    expect(cards.length).toBe(mockProjects.length);
+  it('should render a row per project returned by the service', () => {
+    const rows = fixture.debugElement.nativeElement.querySelectorAll('.project-row');
+    expect(rows.length).toBe(mockProjects.length);
+    expect(rows[0].textContent).toContain('Project A');
+  });
+
+  it('should show the status as a labelled dot, not colour alone', () => {
+    const status = fixture.debugElement.nativeElement.querySelector('.status');
+    expect(status.textContent.trim()).toBe('In today');
   });
 });

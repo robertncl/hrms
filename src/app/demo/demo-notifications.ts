@@ -9,7 +9,7 @@ export function demoNotificationBacklog(): Notification[] {
         { id: 1, title: 'Time off request', message: 'Liam Chen requested 5 days of vacation.', type: 'TimeOff', read: false, date: hoursAgo(1) },
         { id: 2, title: 'Birthday today', message: 'Wish Mia Okafor a happy birthday!', type: 'Birthday', read: false, date: hoursAgo(3) },
         { id: 3, title: 'Interview tomorrow', message: 'Hannah Becker — QA, Senior — at 10:00.', type: 'Other', read: false, date: hoursAgo(20) },
-        { id: 4, title: 'Scheduled maintenance', message: 'HRMS will be read-only on Saturday 02:00–03:00 UTC.', type: 'Maintenance', read: true, date: hoursAgo(48) },
+        { id: 4, title: 'Scheduled maintenance', message: 'ACME People will be read-only on Saturday 02:00–03:00 UTC.', type: 'Maintenance', read: true, date: hoursAgo(48) },
     ];
 }
 

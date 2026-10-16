@@ -1,10 +1,16 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-/** Profile picture, or coloured initials when there is none. */
+/**
+ * Profile picture, or slate initials when there is none.
+ *
+ * Initials are deliberately not tinted per person: ACME rations Cobalt, and a
+ * per-name hue would scatter colour across every list. Away people get the
+ * danger wash, which always travels with a text status beside it.
+ */
 @Component({
   selector: 'app-avatar',
   template: `
-    <span class="avatar" [style.--hue]="hue()" [style.--size]="size()" aria-hidden="true">
+    <span class="avatar" [class.is-away]="away()" [style.--size]="size()" aria-hidden="true">
       @if (src()) {
         <img [src]="src()" alt="" />
       } @else {
@@ -18,7 +24,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 export class AvatarComponent {
   name = input.required<string>();
   src = input<string | undefined>('');
-  size = input('2.25rem');
+  size = input('2rem');
+  away = input(false);
 
   initials = computed(() =>
     this.name()
@@ -28,7 +35,4 @@ export class AvatarComponent {
       .map((part) => part[0].toUpperCase())
       .join(''),
   );
-
-  // Stable hue per name so the same person always gets the same colour.
-  hue = computed(() => [...this.name()].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) % 360, 7));
 }

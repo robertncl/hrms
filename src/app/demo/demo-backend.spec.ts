@@ -98,7 +98,7 @@ describe('DemoBackend', () => {
 
   it('should log in a demo account and return its permissions', async () => {
     const response = await request(http.post<{ token: string; user: { role: string }; permissions: object }>(
-      '/api/auth/login', { email: 'ADMIN@hrms.demo', password: DEMO_PASSWORD },
+      '/api/auth/login', { email: 'ADMIN@acme.com', password: DEMO_PASSWORD },
     ));
     expect(response.token).toBeTruthy();
     expect(response.user.role).toBe('HR Administrator');
@@ -107,20 +107,20 @@ describe('DemoBackend', () => {
   });
 
   it('should reject a wrong password', async () => {
-    await expectError(request(http.post('/api/auth/login', { email: 'admin@hrms.demo', password: 'nope' })), 401);
+    await expectError(request(http.post('/api/auth/login', { email: 'admin@acme.com', password: 'nope' })), 401);
   });
 
   it('should register a new account that can then log in', async () => {
-    await request(http.post('/api/auth/register', { email: 'new@hrms.demo', password: 'pw' }));
-    await expectError(request(http.post('/api/auth/register', { email: 'new@hrms.demo', password: 'pw' })), 409);
+    await request(http.post('/api/auth/register', { email: 'new@acme.com', password: 'pw' }));
+    await expectError(request(http.post('/api/auth/register', { email: 'new@acme.com', password: 'pw' })), 409);
 
-    const response = await request(http.post<{ token: string }>('/api/auth/login', { email: 'new@hrms.demo', password: 'pw' }));
+    const response = await request(http.post<{ token: string }>('/api/auth/login', { email: 'new@acme.com', password: 'pw' }));
     expect(response.token).toBeTruthy();
   });
 
   it('should persist changes and restore the seed on reset', async () => {
     await request(http.delete('/employees/1'));
-    expect(JSON.parse(localStorage.getItem('hrms-demo-db')!).employees.length).toBe(seed.employees.length - 1);
+    expect(JSON.parse(localStorage.getItem('acme-people-db')!).employees.length).toBe(seed.employees.length - 1);
 
     backend.reset();
     const employees = await request(http.get<Employee[]>('/employees'));
@@ -132,7 +132,7 @@ describe('DemoBackend', () => {
   });
 
   it('should build plain ASCII work emails from names', () => {
-    expect(workEmail('James', "O'Connor")).toBe('james.oconnor@hrms.demo');
-    expect(workEmail('Amelia', 'García')).toBe('amelia.garcia@hrms.demo');
+    expect(workEmail('James', "O'Connor")).toBe('james.oconnor@acme.com');
+    expect(workEmail('Amelia', 'García')).toBe('amelia.garcia@acme.com');
   });
 });

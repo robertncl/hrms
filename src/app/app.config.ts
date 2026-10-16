@@ -18,14 +18,14 @@ export const imageLoader = (config: ImageLoaderConfig) => {
   return config.loaderParams?.['src'];
 }
 
-/** Sets the document title to "<route title> · HRMS". */
+/** Sets the document title to "<route title> · ACME People". */
 @Injectable({ providedIn: 'root' })
 export class HrmsTitleStrategy extends TitleStrategy {
   private readonly title = inject(Title);
 
   override updateTitle(snapshot: RouterStateSnapshot) {
     const pageTitle = this.buildTitle(snapshot);
-    this.title.setTitle(pageTitle ? `${pageTitle} · HRMS` : 'HRMS');
+    this.title.setTitle(pageTitle ? `${pageTitle} · ACME People` : 'ACME People');
   }
 }
 
