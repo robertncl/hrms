@@ -27,7 +27,9 @@ describe('DashboardComponent', () => {
     id, firstName: `First${id}`, lastName: `Last${id}`, email: '', position, level: 'Senior', isAvailable, profilePicture: '',
   });
   const employees = [employee(1, 'Developer'), employee(2, 'Developer', false), employee(3, 'QA')];
-  const requests: TimeOffRequest[] = [
+  // Built per test, after the clock is pinned (see beforeEach).
+  let requests: TimeOffRequest[] = [];
+  const buildRequests = (): TimeOffRequest[] => [
     { id: 1, employeeId: 1, startDate: daysFromToday(3), endDate: daysFromToday(4), type: 'Vacation', status: 'Pending' },
     { id: 2, employeeId: 2, startDate: daysFromToday(-1), endDate: daysFromToday(2), type: 'Sick Leave', status: 'Approved' },
     { id: 3, employeeId: 3, startDate: daysFromToday(30), endDate: daysFromToday(31), type: 'Vacation', status: 'Approved' },
@@ -46,7 +48,8 @@ describe('DashboardComponent', () => {
   const enrollment = (id: number, status: Enrollment['status'], dueDate?: string): Enrollment => ({
     id, courseId: 1, employeeId: 1, assignedAt: '', completedModules: 0, status, progress: 0, ...(dueDate ? { dueDate } : {}),
   });
-  const enrollments = [
+  let enrollments: Enrollment[] = [];
+  const buildEnrollments = () => [
     enrollment(1, 'Completed', daysFromToday(-5)),
     enrollment(2, 'In progress', daysFromToday(-1)),
     enrollment(3, 'Not started', daysFromToday(5)),
@@ -60,6 +63,13 @@ describe('DashboardComponent', () => {
   const text = () => fixture.nativeElement.textContent as string;
 
   beforeEach(async () => {
+    // The fixtures assume a Friday: the pending request (3–4 days out) lands on
+    // next Monday–Tuesday and the sick leave (ends in 2 days) finishes on Sunday.
+    // On other weekdays "next week" catches different requests.
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(2026, 9, 16, 12, 0, 0));
+    requests = buildRequests();
+    enrollments = buildEnrollments();
     mockCandidateService = { getCandidates: jasmine.createSpy('getCandidates').and.returnValue(of(candidates)) };
     mockTimeOffRequestService = {
       getRequests: jasmine.createSpy('getRequests').and.returnValue(of(requests)),
@@ -83,6 +93,8 @@ describe('DashboardComponent', () => {
 
     render('HR Administrator');
   });
+
+  afterEach(() => jasmine.clock().uninstall());
 
   /** Renders Home for someone signed in with `role`. */
   const render = (role: DemoRole, employeeId?: number) => {

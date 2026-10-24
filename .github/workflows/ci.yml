@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: ["master"]
 
+# Build and test only read the repository; nothing here needs write access.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Build & Test

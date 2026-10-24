@@ -37,9 +37,14 @@ export function awayLabels(requests: TimeOffRequest[], today = new Date()): Reco
   return labels;
 }
 
-function csvCell(value: string): string {
+/** Exported for tests. */
+export function csvCell(value: string): string {
+  // Spreadsheets run a cell starting with = + - @ (or a tab/CR before one) as
+  // a formula, so a name like "=HYPERLINK(...)" would execute when HR opens
+  // the export. A leading apostrophe makes it plain text (OWASP CSV injection).
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   // Quote anything that could otherwise break the row apart.
-  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /** The visible table as CSV, in the same order and with the same columns. */
