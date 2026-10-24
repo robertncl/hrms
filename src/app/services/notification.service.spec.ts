@@ -116,4 +116,10 @@ describe('NotificationService', () => {
 
     expect(JSON.parse(localStorage.getItem('notifications') ?? '[]')).toEqual([mockNotification]);
   });
+
+  it('should start empty when the saved notifications are unreadable', () => {
+    localStorage.setItem('notifications', '{not json');
+    const restored = TestBed.runInInjectionContext(() => new NotificationService());
+    expect(restored.notifications()).toEqual([]);
+  });
 });

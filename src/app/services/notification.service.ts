@@ -6,9 +6,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 @Injectable({providedIn: 'root'})
 export class NotificationService {
     private readonly socketService = inject(SocketService);
-    #notifications = signal<Notification[]>(
-        localStorage.getItem('notifications') ? JSON.parse(localStorage.getItem('notifications') ?? '') : [],
-    );
+    #notifications = signal<Notification[]>(readSaved());
     notifications = this.#notifications.asReadonly();
     readNotifications = computed(() => this.#notifications().filter(n => n.read));
     unreadNotifications = computed(() => this.#notifications().filter(n => !n.read));
@@ -41,5 +39,15 @@ export class NotificationService {
 
     markAllAsRead() {
         this.#notifications.update(value => value.map(n => ({...n, read: true})));
+    }
+}
+
+/** Saved notifications, or none if storage is blocked or holds something unreadable. */
+function readSaved(): Notification[] {
+    try {
+        const saved = JSON.parse(localStorage.getItem('notifications') ?? '[]');
+        return Array.isArray(saved) ? saved : [];
+    } catch {
+        return [];
     }
 }

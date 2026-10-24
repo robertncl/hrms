@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { environment } from 'src/environments/environment';
 import { Router, RouterLink } from '@angular/router';
 import { finalize, switchMap } from 'rxjs';
 
@@ -24,6 +25,9 @@ import { AuthLayoutComponent } from '../shared/components/auth-layout.component'
             required [(ngModel)]="credentials.password" aria-describedby="reg-password-hint" />
           <span id="reg-password-hint" class="hint">
             At least 8 characters. A passphrase is easier to remember.
+            @if (isDemo) {
+              <strong>This is a demo:</strong> the account is saved unencrypted in this browser, so don't reuse a real password.
+            }
           </span>
         </div>
         <div class="field">
@@ -59,6 +63,7 @@ import { AuthLayoutComponent } from '../shared/components/auth-layout.component'
   imports: [FormsModule, RouterLink, AuthLayoutComponent],
 })
 export class RegistrationComponent {
+  readonly isDemo = environment.demo;
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
 

@@ -58,4 +58,14 @@ describe('authInterceptor', () => {
     expect(req.request.headers.has('Authorization')).toBeFalse();
     req.flush({});
   });
+
+  it('should not attach the token to a host that merely starts with the API URL', () => {
+    mockAuthService.getToken.and.returnValue('secret-token');
+
+    httpClient.get(`${environment.apiUrl}.evil.example/steal`).subscribe();
+
+    const req = httpMock.expectOne(`${environment.apiUrl}.evil.example/steal`);
+    expect(req.request.headers.has('Authorization')).toBeFalse();
+    req.flush({});
+  });
 });

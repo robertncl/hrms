@@ -1,7 +1,7 @@
 import { HttpHandlerFn, HttpRequest, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { AuthService } from 'src/app/services/auth.service';
-import { environment } from 'src/environments/environment';
+import { isApiRequest } from './api-url.interceptor';
 
 export const authInterceptor: HttpInterceptorFn = (
     req: HttpRequest<any>,
@@ -9,7 +9,7 @@ export const authInterceptor: HttpInterceptorFn = (
 ) => {
     const token = inject(AuthService).getToken();
     // Only attach the token to requests bound for our own API.
-    if (!token || !req.url.startsWith(environment.apiUrl)) {
+    if (!token || !isApiRequest(req.url)) {
         return next(req);
     }
     return next(req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }));
