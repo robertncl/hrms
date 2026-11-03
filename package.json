@@ -10,22 +10,22 @@
   },
   "private": true,
   "dependencies": {
-    "@angular/animations": "22.2.3",
-    "@angular/common": "22.2.3",
-    "@angular/compiler": "22.2.3",
-    "@angular/core": "22.2.3",
-    "@angular/forms": "22.2.3",
-    "@angular/platform-browser": "22.2.3",
-    "@angular/platform-browser-dynamic": "22.2.3",
-    "@angular/router": "22.2.3",
+    "@angular/animations": "22.2.4",
+    "@angular/common": "22.2.4",
+    "@angular/compiler": "22.2.4",
+    "@angular/core": "22.2.4",
+    "@angular/forms": "22.2.4",
+    "@angular/platform-browser": "22.2.4",
+    "@angular/platform-browser-dynamic": "22.2.4",
+    "@angular/router": "22.2.4",
     "rxjs": "7.8.2",
-    "tslib": "2.8.1",
+    "tslib": "2.9.1",
     "zone.js": "0.16.3"
   },
   "devDependencies": {
     "@angular/build": "22.2.5",
     "@angular/cli": "22.2.5",
-    "@angular/compiler-cli": "22.2.3",
+    "@angular/compiler-cli": "22.2.4",
     "@types/jasmine": "7.0.0",
     "istanbul-lib-instrument": "6.0.3",
     "jasmine-core": "6.3.0",
@@ -39,14 +39,14 @@
   },
   "overrides": {
     "body-parser": "1.20.9",
-    "electron-to-chromium": "1.5.404",
+    "electron-to-chromium": "1.5.472",
     "fast-uri": "3.1.9",
-    "hono": "4.13.7",
-    "@hono/node-server": "2.1.0",
-    "@napi-rs/wasm-runtime": "1.2.2",
+    "hono": "4.13.16",
+    "@hono/node-server": "2.1.5",
+    "@napi-rs/wasm-runtime": "1.2.6",
     "puppeteer-core": {
-      "ws": "8.21.2"
+      "ws": "8.22.1"
     },
-    "vite": "8.3.4"
+    "vite": "8.3.5"
   }
 }
