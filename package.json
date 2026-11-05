@@ -42,12 +42,11 @@
     "electron-to-chromium": "1.5.472",
     "fast-uri": "3.1.9",
     "hono": "4.13.16",
-    "@hono/node-server": "2.1.5",
-    "@napi-rs/wasm-runtime": "1.2.6",
+    "@hono/node-server": "2.1.6",
+    "@napi-rs/wasm-runtime": "1.2.7",
     "puppeteer-core": {
       "ws": "8.22.1"
     },
-    "vite": "8.3.5",
-    "minimatch": "11.0.4"
+    "vite": "8.3.5"
   }
 }
