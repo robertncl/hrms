@@ -5,15 +5,15 @@ import { NotificationService } from 'src/app/services/notification.service';
 import { IconComponent } from './icon.component';
 
 /**
- * Notifications, docked beside the sidebar rather than centred in a modal, so
- * the page it refers to stays visible behind it. Unread items keep the Cobalt
- * dot and wash; read ones drop both.
+ * Notifications, dropped from the bell in the app bar rather than centred in
+ * a modal, so the page it refers to stays visible behind it. Unread items
+ * keep the info-blue dot and wash; read ones drop both.
  */
 @Component({
   selector: 'app-notifications-panel',
   template: `
     <button class="scrim" type="button" (click)="dismiss.emit()" tabindex="-1" aria-hidden="true"></button>
-    <aside class="panel panel-left" role="dialog" aria-modal="true" aria-labelledby="notifications-title">
+    <aside class="panel panel-popover" role="dialog" aria-modal="true" aria-labelledby="notifications-title">
       <div class="panel-header">
         <h2 id="notifications-title">Notifications</h2>
         <div class="head-actions">
@@ -64,7 +64,7 @@ import { IconComponent } from './icon.component';
       padding: var(--acme-space-3) var(--acme-space-6);
       border-bottom: 1px solid var(--app-hairline);
     }
-    li.unread { background: var(--acme-color-selected-soft); }
+    li.unread { background: var(--acme-color-info-soft); }
 
     .dot {
       width: 8px;
@@ -73,7 +73,7 @@ import { IconComponent } from './icon.component';
       border-radius: var(--acme-radius-full);
       background: transparent;
     }
-    li.unread .dot { background: var(--acme-color-primary); }
+    li.unread .dot { background: var(--acme-color-info); }
 
     .note { display: grid; gap: 3px; min-width: 0; }
     .note strong { font-size: var(--acme-text-sm); }
@@ -93,7 +93,7 @@ import { IconComponent } from './icon.component';
       padding: 0;
       background: none;
       color: var(--acme-color-link);
-      font: 600 var(--acme-text-xs) var(--acme-font-sans);
+      font: 500 var(--acme-text-xs) var(--acme-font-sans);
       cursor: pointer;
     }
     .link:hover { text-decoration: underline; }

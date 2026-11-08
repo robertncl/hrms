@@ -104,8 +104,8 @@ describe('DashboardComponent', () => {
     fixture = TestBed.createComponent(DashboardComponent);
     fixture.detectChanges();
   };
-  const tabLabels = () =>
-    Array.from(fixture.nativeElement.querySelectorAll('.chips .chip') as NodeListOf<HTMLElement>).map((c) => c.textContent!.trim());
+  const tabs = () => Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]') as NodeListOf<HTMLButtonElement>);
+  const tabLabels = () => tabs().map((t) => t.textContent!.replace(/\s+/g, ' ').trim());
   const actionLabels = () =>
     Array.from(fixture.nativeElement.querySelectorAll('.page-actions a') as NodeListOf<HTMLElement>).map((a) => a.textContent!.trim());
 
@@ -123,10 +123,12 @@ describe('DashboardComponent', () => {
     expect(rows[0].textContent).toContain('No clashes');
   });
 
-  it('should flag a request that starts within a few days', () => {
+  it('should flag a request that starts within a few days as a warning, with its glyph', () => {
     const badge = fixture.nativeElement.querySelector('.row-item .badge');
     expect(badge.textContent).toContain('Starts in 3 days');
-    expect(badge.classList).toContain('badge-critical');
+    expect(badge.classList).toContain('badge-warning');
+    // Status never relies on hue alone.
+    expect(badge.querySelector('app-status-icon svg')).not.toBeNull();
   });
 
   it('should put overdue training in the queue', () => {
@@ -135,12 +137,36 @@ describe('DashboardComponent', () => {
     expect(training).toBeTruthy();
     expect(training.textContent).toContain('Security');
     expect(training.querySelector('.badge')!.textContent).toContain('Overdue');
+    expect(training.querySelector('.badge')!.classList).toContain('badge-critical');
   });
 
-  it('should split the queue by kind', () => {
-    const chips = Array.from(fixture.nativeElement.querySelectorAll('.chips .chip') as NodeListOf<HTMLElement>)
-      .map((c) => c.textContent!.replace(/\s+/g, ' ').trim());
-    expect(chips).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1']);
+  it('should split the queue by kind with counted tabs', () => {
+    expect(tabLabels()).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1']);
+    expect(tabs()[0].getAttribute('aria-selected')).toBe('true');
+
+    tabs()[3].click();
+    fixture.detectChanges();
+
+    expect(tabs()[3].getAttribute('aria-selected')).toBe('true');
+    const rows = fixture.nativeElement.querySelectorAll('.row-item');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Training overdue');
+  });
+
+  it('should move between tabs with the arrow keys', () => {
+    tabs()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    fixture.detectChanges();
+    expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+
+    tabs()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End' }));
+    fixture.detectChanges();
+    expect(tabs()[3].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('should say who is out today and why', () => {
+    const alert = fixture.nativeElement.querySelector('.acme-alert');
+    expect(alert.querySelector('.acme-alert__title').textContent).toContain('1 person is out today');
+    expect(alert.textContent).toContain('First2 Last2 (sick leave until');
   });
 
   it('should show who is out next week, marking what is still pending', () => {
@@ -158,7 +184,7 @@ describe('DashboardComponent', () => {
     expect(labels).toEqual(['Developer', 'Designer', 'QA', 'Manager']);
     expect(values).toEqual(['2', '0', '1', '0']);
 
-    // Cobalt marks exactly one takeaway: the biggest group.
+    // Blue marks exactly one takeaway: the biggest group.
     const highlighted = fixture.nativeElement.querySelectorAll('.bars .meter > .is-highlight');
     expect(highlighted.length).toBe(1);
   });
@@ -177,6 +203,10 @@ describe('DashboardComponent', () => {
 
     expect(mockTimeOffRequestService.approveRequest).toHaveBeenCalledWith(1);
     expect(mockTimeOffRequestService.getRequests).toHaveBeenCalledTimes(1);
+
+    fixture.detectChanges();
+    const saved = fixture.nativeElement.querySelector('.acme-alert--success');
+    expect(saved.textContent).toContain("Approved First1 Last1's vacation.");
   });
 
   describe('for other roles', () => {

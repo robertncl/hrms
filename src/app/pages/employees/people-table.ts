@@ -1,6 +1,7 @@
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { Project } from 'src/app/infrastructure/types/project';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
+import { absenceType } from 'src/app/shared/functions/absence';
 
 /** Project names per employee id, joined for the Projects column. */
 export function employeeProjectNames(projects: Project[]): Record<number, string> {
@@ -32,7 +33,7 @@ export function awayLabels(requests: TimeOffRequest[], today = new Date()): Reco
   for (const request of requests) {
     if (request.status !== 'Approved') continue;
     if (request.startDate > iso || request.endDate < iso) continue;
-    labels[request.employeeId] = `${request.type} until ${formatDay(request.endDate)}`;
+    labels[request.employeeId] = `${absenceType(request.type)} until ${formatDay(request.endDate)}`;
   }
   return labels;
 }
