@@ -3,9 +3,10 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 /**
  * Profile picture, or slate initials when there is none.
  *
- * Initials are deliberately not tinted per person: ACME rations Cobalt, and a
- * per-name hue would scatter colour across every list. Away people get the
- * danger wash, which always travels with a text status beside it.
+ * Initials are deliberately not tinted per person: ACME keeps Blue for what
+ * you can interact with, and a per-name hue would scatter colour across every
+ * list. Away people get the warning wash, which always travels with a text
+ * status beside it.
  */
 @Component({
   selector: 'app-avatar',

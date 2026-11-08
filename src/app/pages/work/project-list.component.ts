@@ -6,12 +6,15 @@ import { forkJoin } from 'rxjs';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { ProjectService } from 'src/app/services/project.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
+import { PeopleSectionsComponent } from 'src/app/shared/components/people-sections.component';
+import { StatusIconComponent } from 'src/app/shared/components/status-icon.component';
 import { projectStaffing } from './project-staffing';
 
 @Component({
   selector: 'app-project-list',
   template: `
     <div class="page">
+      <app-people-sections />
       <div class="page-header">
         <div>
           <h1>Projects</h1>
@@ -35,7 +38,7 @@ import { projectStaffing } from './project-staffing';
                     <a [routerLink]="['/work/projects', project.id]">{{ project.name }}</a>
                   </h2>
                   @if (project.awayCount) {
-                    <span class="badge badge-critical">{{ project.awayCount }} away</span>
+                    <span class="badge badge-warning"><app-status-icon variant="warning" [size]="12" />{{ project.awayCount }} away</span>
                   }
                 </div>
                 @if (project.description) {
@@ -129,7 +132,7 @@ import { projectStaffing } from './project-staffing';
     }
   `,
   standalone: true,
-  imports: [NgOptimizedImage, RouterLink, AvatarComponent],
+  imports: [NgOptimizedImage, RouterLink, AvatarComponent, PeopleSectionsComponent, StatusIconComponent],
 })
 export class ProjectListComponent {
   private readonly projectService = inject(ProjectService);

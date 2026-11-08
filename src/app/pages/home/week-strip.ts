@@ -1,5 +1,6 @@
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
+import { absenceType } from 'src/app/shared/functions/absence';
 
 /** One absence bar laid across the Mon-Fri strip. */
 export type WeekBar = {
@@ -15,7 +16,7 @@ const DAY = 86_400_000;
 const WORKING_DAYS = 5;
 
 export function nextWeekDays(): string[] {
-  return ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+  return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 }
 
 /** Midnight on the Monday of next week. */
@@ -78,7 +79,7 @@ export function nextWeekBars(
       return {
         id: request.id,
         name: names.get(request.employeeId) ?? `Employee #${request.employeeId}`,
-        label: pending ? 'Pending' : request.type,
+        label: pending ? 'Pending' : absenceType(request.type),
         column: `${startDay + 2} / ${endDay + 3}`,
         pending,
       };

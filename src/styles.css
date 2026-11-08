@@ -6,21 +6,26 @@
    onto ACME semantic tokens and adds the shared patterns the People screens
    need: decision queues, absence timelines, the hiring board, filter chips.
 
-   Rules carried over from the design system:
+   Rules carried over from the design system (v5):
    - Light theme only. No prefers-color-scheme, no data-theme switch.
-   - One solid (primary) action per view; Cobalt is the only highlight.
+   - Every colour has one job: ink fills the one primary action per view,
+     Blue marks what you can interact with (links, focus, selection),
+     Green / Amber / Red / Blue report status, Signal Red signs the brand
+     and, on a control, means destructive.
+   - Status never travels by hue alone: badges name it, alerts carry an icon.
+   - Raised surfaces take a hairline; shadows only say how high.
    - Semantic tokens only — no hex literals below this comment.
    - 4px spacing grid.
    ========================================================================== */
 @import './styles/acme.css';
 
 :root {
-  /* App-level aliases. The People screens separate cards from the canvas with
-     the lightest slate hairline rather than --acme-color-border, which reads
-     too heavy once every row has one. */
-  --app-hairline: var(--acme-gray-100);
-  --app-sidebar-width: 248px;
-  --app-content-max: 1440px;
+  /* App-level aliases. Every card, row and table rule uses the system's own
+     hairline. */
+  --app-hairline: var(--acme-color-border);
+  /* The 56px app bar, and the 1200px container the pages centre in. */
+  --app-topbar-h: 3.5rem;
+  --app-content-max: 1200px;
 
   /* Control heights used across the screens. */
   --app-control-h: 40px;
@@ -28,9 +33,9 @@
 }
 
 /* ---------- Base overrides ---------- */
-h1 { font-size: var(--acme-text-4xl); }
-h2 { font-size: var(--acme-text-xl); letter-spacing: 0; }
-h3 { font-size: var(--acme-text-lg); }
+h1 { font-size: var(--acme-text-3xl); }
+h2 { font-size: var(--acme-text-lg); letter-spacing: var(--acme-tracking-snug); }
+h3 { font-size: var(--acme-text-md); letter-spacing: var(--acme-tracking-snug); }
 
 p { margin: 0; }
 
@@ -53,15 +58,16 @@ fieldset { min-inline-size: 0; }
   white-space: nowrap;
 }
 
-/* Kept from the original app: links to employees who are away. */
-.not-available { color: var(--acme-color-danger); }
+/* Kept from the original app: links to employees who are away. Red is kept
+   for destructive controls, so an away link only steps down to muted ink;
+   the status label beside it says why. */
+.not-available { color: var(--acme-color-text-muted); }
 
-/* Editorial kicker — uppercase cobalt label above a page title. */
+/* Context line above a page title (the date on Home). Sentence case and
+   muted: uppercase red kickers belong to decks and reports. */
 .kicker {
-  font: 600 var(--acme-text-xs) / 1.2 var(--acme-font-sans);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--acme-color-accent);
+  font: 500 var(--acme-text-sm) / 1.4 var(--acme-font-sans);
+  color: var(--acme-color-text-muted);
 }
 
 /* ---------- Page structure ---------- */
@@ -69,13 +75,15 @@ fieldset { min-inline-size: 0; }
   display: grid;
   /* minmax(0, …) so wide content can't stretch the page past the viewport. */
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--acme-space-6);
+  gap: var(--acme-space-8);
   align-content: start;
-  padding: var(--acme-space-10) var(--acme-space-12);
-  max-width: var(--app-content-max);
+  /* Centred 1200px container with 24px gutters under the app bar. */
+  padding: var(--acme-space-12) var(--acme-space-6) var(--acme-space-16);
+  max-width: calc(var(--app-content-max) + 2 * var(--acme-space-6));
+  margin-inline: auto;
 }
 
-.page.narrow { max-width: 960px; }
+.page.narrow { max-width: calc(960px + 2 * var(--acme-space-6)); }
 
 /* Pages that own their padding (full-bleed heroes). */
 .page.bleed { padding: 0; gap: 0; }
@@ -88,7 +96,7 @@ fieldset { min-inline-size: 0; }
   gap: var(--acme-space-4) var(--acme-space-6);
 }
 
-.page-header h1 { margin: 0; }
+.page-header h1 { margin: 0; letter-spacing: var(--acme-tracking-tight); }
 .page-header p {
   margin-top: var(--acme-space-2);
   font-size: var(--acme-text-md);
@@ -127,7 +135,7 @@ fieldset { min-inline-size: 0; }
   border: 1px solid var(--app-hairline);
   border-radius: var(--acme-radius-lg);
   box-shadow: var(--acme-shadow-sm);
-  padding: var(--acme-space-5) var(--acme-space-6);
+  padding: var(--acme-space-5);
 }
 
 /* Cards that host full-width rows manage their own padding. */
@@ -146,9 +154,11 @@ fieldset { min-inline-size: 0; }
 .card-header h2 { margin: 0; }
 
 .card.flush .card-header {
-  padding: var(--acme-space-5) var(--acme-space-6) var(--acme-space-3);
+  padding: var(--acme-space-5) var(--acme-space-5) var(--acme-space-3);
   margin-bottom: 0;
 }
+.card-header h2 { font-size: var(--acme-text-md); }
+.card.flush .card-header h2 { font-size: var(--acme-text-lg); }
 
 .grid {
   display: grid;
@@ -166,7 +176,9 @@ fieldset { min-inline-size: 0; }
 .split.even { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
 .split > * { min-width: 0; }
 
-.stack {
+/* A vertical stack of cards. Not for tables: .data-table.stack is the
+   phone-width card layout further down, and must stay a table. */
+.stack:not(table) {
   display: grid;
   gap: var(--acme-space-6);
   align-content: start;
@@ -191,11 +203,13 @@ fieldset { min-inline-size: 0; }
   gap: var(--acme-space-2);
   min-height: var(--app-control-h);
   padding: 0 var(--acme-space-4);
-  border: 1px solid var(--acme-color-border);
+  border: 1px solid var(--acme-color-border-control);
   border-radius: var(--acme-radius-md);
   background: var(--acme-color-surface-raised);
+  box-shadow: var(--acme-shadow-sm);
   color: var(--acme-color-text);
-  font: 600 var(--acme-text-sm) / 1 var(--acme-font-sans);
+  font: 500 var(--acme-text-sm) / 1 var(--acme-font-sans);
+  letter-spacing: var(--acme-tracking-snug);
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
@@ -205,10 +219,17 @@ fieldset { min-inline-size: 0; }
     color var(--acme-duration-base) var(--acme-ease-out);
 }
 
-.btn:hover { background: var(--acme-color-surface); }
+.btn:hover { background: var(--acme-color-surface); border-color: var(--acme-color-border-strong); color: var(--acme-color-text); }
+.btn:active { background: var(--acme-color-surface-hover); }
 
-.btn:disabled {
-  opacity: 0.5;
+/* Disabled: readable, not faded — surface fill, subtle ink, no shadow. */
+.btn:disabled,
+.btn:disabled:hover {
+  background: var(--acme-color-surface);
+  border-color: var(--acme-color-border);
+  color: var(--acme-color-text-subtle);
+  box-shadow: none;
+  filter: none;
   cursor: not-allowed;
 }
 
@@ -225,22 +246,24 @@ fieldset { min-inline-size: 0; }
   border-color: var(--acme-color-danger-emphasis);
   color: var(--acme-color-on-primary);
 }
-.btn-danger:hover { filter: brightness(0.92); }
+.btn-danger:hover { background: var(--acme-color-danger-emphasis-hover); border-color: var(--acme-color-danger-emphasis-hover); color: var(--acme-color-on-primary); }
 
 .btn-ghost {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   color: var(--acme-color-text-muted);
 }
-.btn-ghost:hover { background: var(--acme-color-surface); color: var(--acme-color-text); }
+.btn-ghost:hover { background: var(--acme-color-surface-hover); border-color: transparent; color: var(--acme-color-text); }
 
 /* Quiet danger: a destructive action that is not the view's primary. */
 .btn-quiet-danger {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   color: var(--acme-color-danger);
 }
-.btn-quiet-danger:hover { background: var(--acme-color-danger-soft); }
+.btn-quiet-danger:hover { background: var(--acme-color-danger-soft); border-color: transparent; color: var(--acme-color-danger); }
 
 .btn-sm {
   min-height: var(--app-control-h-sm);
@@ -256,9 +279,10 @@ fieldset { min-inline-size: 0; }
   min-height: var(--app-control-h-sm);
   border-color: transparent;
   background: transparent;
+  box-shadow: none;
   color: var(--acme-color-text-muted);
 }
-.btn-icon:hover { background: var(--acme-color-surface); color: var(--acme-color-text); }
+.btn-icon:hover { background: var(--acme-color-surface-hover); border-color: transparent; color: var(--acme-color-text); }
 
 /* ---------- Inputs ---------- */
 .input,
@@ -271,6 +295,7 @@ fieldset { min-inline-size: 0; }
   border: 1px solid var(--acme-color-border-strong);
   border-radius: var(--acme-radius-md);
   background: var(--acme-color-surface-raised);
+  box-shadow: var(--acme-shadow-sm);
   color: var(--acme-color-text);
   font: 400 var(--acme-text-sm) / var(--acme-leading-normal) var(--acme-font-sans);
   transition: border-color var(--acme-duration-base) var(--acme-ease-out);
@@ -300,7 +325,7 @@ fieldset { min-inline-size: 0; }
 .field > label,
 .field > .label {
   font-size: var(--acme-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .field .hint {
@@ -321,7 +346,9 @@ fieldset { min-inline-size: 0; }
 
 .field :disabled {
   background: var(--acme-color-surface);
-  opacity: 0.6;
+  border-color: var(--acme-color-border);
+  color: var(--acme-color-text-subtle);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -398,6 +425,7 @@ fieldset { min-inline-size: 0; }
   border: 1px solid var(--acme-color-border-strong);
   border-radius: var(--acme-radius-md);
   background: var(--acme-color-surface-raised);
+  box-shadow: var(--acme-shadow-sm);
   color: var(--acme-color-text-subtle);
 }
 .search:focus-within { border-color: var(--acme-color-focus); }
@@ -424,7 +452,7 @@ fieldset { min-inline-size: 0; }
   border-radius: var(--acme-radius-full);
   background: var(--acme-color-surface-raised);
   color: var(--acme-color-text-muted);
-  font: 600 var(--acme-text-sm) / 1.2 var(--acme-font-sans);
+  font: 500 var(--acme-text-sm) / 1.2 var(--acme-font-sans);
   text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
@@ -444,16 +472,24 @@ fieldset { min-inline-size: 0; }
 .chip.is-active:hover { color: var(--acme-color-selected); }
 
 /* ---------- Tabs ---------- */
+/* Underline tabs: a hairline baseline across the set; the selected tab
+   carries a 2px ink indicator on it. */
 .tabs {
   display: flex;
   align-items: center;
-  gap: var(--acme-space-6);
+  gap: var(--acme-space-4);
   border-bottom: 1px solid var(--acme-color-border);
-  font: 600 var(--acme-text-sm) / 1 var(--acme-font-sans);
+  font: 500 var(--acme-text-sm) / 1.5 var(--acme-font-sans);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .tab {
-  padding: var(--acme-space-3) 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--acme-space-1);
+  padding: var(--acme-space-2) 0;
+  white-space: nowrap;
   margin-bottom: -1px;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -469,14 +505,24 @@ fieldset { min-inline-size: 0; }
 .tab:hover { color: var(--acme-color-text); }
 .tab[aria-selected='true'],
 .tab.is-active {
-  border-bottom-color: var(--acme-color-selected);
-  color: var(--acme-color-selected);
+  border-bottom-color: var(--acme-color-text);
+  color: var(--acme-color-text);
+}
+
+/* Count beside a tab label — one of the two places pills are allowed. */
+.tab-count {
+  padding: 0 0.375rem;
+  border-radius: var(--acme-radius-full);
+  background: var(--acme-color-surface-hover);
+  color: var(--acme-color-text-muted);
+  font-size: var(--acme-text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Tab strip inside a flush card, with room for a trailing action. */
 .card.flush > .tabs {
-  gap: var(--acme-space-6);
-  padding: 0 var(--acme-space-6);
+  gap: var(--acme-space-4);
+  padding: 0 var(--acme-space-5);
   border-bottom-color: var(--app-hairline);
 }
 .card.flush > .tabs .push { margin-left: auto; }
@@ -498,42 +544,48 @@ fieldset { min-inline-size: 0; }
   border-radius: var(--acme-radius-full);
   background: var(--acme-gray-300);
 }
-.status.is-away { color: var(--acme-color-danger); }
-.status.is-away::before { background: var(--acme-color-danger); }
-.status.is-pending { color: var(--acme-color-selected); }
-.status.is-pending::before { background: var(--acme-color-primary); }
+/* Away and clashing are warnings, not danger: amber ink plus the label. */
+.status.is-away { color: var(--acme-color-warning); }
+.status.is-away::before { background: var(--acme-color-warning); }
+.status.is-pending { color: var(--acme-color-info); }
+.status.is-pending::before { background: var(--acme-color-info); }
 
 /* ---------- Badges ---------- */
+/* The ACME badge: 4px corners, a hairline, and a soft / soft-text / border
+   set per status that always travels together. Status badges carry the
+   system's glyph (<app-status-icon>) so they read without colour. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: var(--acme-space-1);
-  padding: 0.1875rem var(--acme-space-2);
-  border-radius: var(--acme-radius-full);
-  background: var(--acme-color-surface);
+  padding: 0.0625rem var(--acme-space-2);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-sm);
+  background: var(--acme-color-surface-hover);
   color: var(--acme-color-text-muted);
-  font: 600 var(--acme-text-xs) / 1.3 var(--acme-font-sans);
+  font: 500 var(--acme-text-xs) / var(--acme-leading-normal) var(--acme-font-sans);
   white-space: nowrap;
 }
+.badge > svg { flex: none; }
 
-/* Success and warning stay in slate ink — only danger and info take a hue. */
-.badge-good,
-.badge-warning { background: var(--acme-color-success-soft); color: var(--acme-color-success-soft-text); }
+.badge-good { background: var(--acme-color-success-soft); color: var(--acme-color-success-soft-text); border-color: var(--acme-color-success-border); }
+.badge-warning { background: var(--acme-color-warning-soft); color: var(--acme-color-warning-soft-text); border-color: var(--acme-color-warning-border); }
 .badge-serious,
-.badge-critical { background: var(--acme-color-danger-soft); color: var(--acme-color-danger-soft-text); }
-.badge-info { background: var(--acme-color-info-soft); color: var(--acme-color-info-soft-text); }
-.badge-selected { background: var(--acme-color-selected-soft); color: var(--acme-blue-800); }
+.badge-critical { background: var(--acme-color-danger-soft); color: var(--acme-color-danger-soft-text); border-color: var(--acme-color-danger-border); }
+.badge-info { background: var(--acme-color-info-soft); color: var(--acme-color-info-soft-text); border-color: var(--acme-color-info-border); }
+.badge-selected { background: var(--acme-color-selected-soft); color: var(--acme-color-info-soft-text); border-color: var(--acme-color-info-border); }
 
-/* Count pill on a nav item or a tab. */
+/* Count beside a destination in the app bar: the tab-count pill. */
 .count-pill {
   display: inline-grid;
   place-items: center;
-  min-width: 1.3rem;
-  padding: 0 var(--acme-space-2);
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
   border-radius: var(--acme-radius-full);
-  background: var(--acme-color-primary);
-  color: var(--acme-color-on-primary);
-  font: 600 var(--acme-text-xs) / 1.5 var(--acme-font-sans);
+  background: var(--acme-color-surface-hover);
+  color: var(--acme-color-text);
+  font: 500 var(--acme-text-xs) / 1.5 var(--acme-font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 .tag {
@@ -546,9 +598,11 @@ fieldset { min-inline-size: 0; }
 }
 
 /* ---------- Alerts / callouts ---------- */
+/* One-line notices. Full alerts with a title and icon use .acme-alert. */
 .alert {
   padding: var(--acme-space-3) var(--acme-space-4);
-  border-radius: var(--acme-radius-md);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-lg);
   background: var(--acme-color-surface);
   color: var(--acme-color-text);
   font-size: var(--acme-text-sm);
@@ -557,33 +611,34 @@ fieldset { min-inline-size: 0; }
 
 .alert-error {
   background: var(--acme-color-danger-soft);
+  border-color: var(--acme-color-danger-border);
   color: var(--acme-color-danger-soft-text);
 }
 
 .alert-info {
   background: var(--acme-color-info-soft);
+  border-color: var(--acme-color-info-border);
   color: var(--acme-color-info-soft-text);
 }
 .alert-info a { color: inherit; font-weight: 600; }
 
-/* Cobalt callout — an item waiting on the viewer's decision. */
+/* Callout — an item waiting on the viewer's decision, in the info set. */
 .callout {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--acme-space-4);
   padding: var(--acme-space-4) var(--acme-space-5);
+  border: 1px solid var(--acme-color-info-border);
   border-radius: var(--acme-radius-lg);
-  background: var(--acme-color-accent-soft);
+  background: var(--acme-color-info-soft);
 }
 .callout .callout-body { flex: 1 1 18rem; }
-.callout strong { display: block; font-size: var(--acme-text-sm); color: var(--acme-blue-900); }
-.callout span { font-size: var(--acme-text-sm); color: var(--acme-blue-800); }
-.callout .btn-ghost { color: var(--acme-blue-800); }
+.callout strong { display: block; font-size: var(--acme-text-sm); color: var(--acme-color-text); }
+.callout span { font-size: var(--acme-text-sm); color: var(--acme-color-info-soft-text); }
 
-.callout-danger { background: var(--acme-color-danger-soft); }
-.callout-danger strong { color: var(--acme-red-800); }
-.callout-danger span { color: var(--acme-red-700); }
+.callout-danger { background: var(--acme-color-danger-soft); border-color: var(--acme-color-danger-border); }
+.callout-danger span { color: var(--acme-color-danger-soft-text); }
 
 /* ---------- Row lists (decision queues, team lists) ---------- */
 .rows { display: grid; }
@@ -593,13 +648,13 @@ fieldset { min-inline-size: 0; }
   grid-template-columns: 36px minmax(0, 1fr) auto;
   gap: var(--acme-space-4);
   align-items: center;
-  padding: var(--acme-space-3) var(--acme-space-6);
+  padding: var(--acme-space-4) var(--acme-space-5);
   border-top: 1px solid var(--app-hairline);
 }
 
 .row-item > .row-body {
   display: grid;
-  gap: 0.125rem;
+  gap: var(--acme-space-1);
   min-width: 0;
 }
 
@@ -611,7 +666,7 @@ fieldset { min-inline-size: 0; }
 }
 .row-title strong { font-size: var(--acme-text-sm); font-weight: 600; }
 .row-title .what { font-size: var(--acme-text-sm); color: var(--acme-color-text-muted); }
-.row-note { font-size: var(--acme-text-sm); color: var(--acme-color-text-subtle); }
+.row-note { font-size: 0.8125rem; color: var(--acme-color-text-muted); }
 
 .row-actions {
   display: flex;
@@ -621,10 +676,11 @@ fieldset { min-inline-size: 0; }
 }
 
 .rows-footer {
-  padding: var(--acme-space-3) var(--acme-space-6);
+  padding: var(--acme-space-3) var(--acme-space-5);
   border-top: 1px solid var(--app-hairline);
+  background: var(--acme-color-surface);
   font-size: var(--acme-text-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 .rows-footer a { text-decoration: none; }
 .rows-footer a:hover { text-decoration: underline; }
@@ -640,7 +696,7 @@ fieldset { min-inline-size: 0; }
 .person > div { display: grid; min-width: 0; line-height: 1.3; }
 .person a {
   color: var(--acme-color-text);
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
 }
 .person a:hover { color: var(--acme-color-link); text-decoration: underline; }
@@ -678,24 +734,25 @@ table.data-table {
 
 .data-table th,
 .data-table td {
-  padding: var(--acme-space-3) var(--acme-space-6);
+  padding: var(--acme-space-3) var(--acme-space-5);
   text-align: start;
   vertical-align: middle;
   border-bottom: 1px solid var(--app-hairline);
 }
 
-.data-table thead { background: var(--acme-color-canvas); }
+/* Recessed header band: sentence case, 12px / 500, no uppercase. */
+.data-table thead { background: var(--acme-color-surface); }
 
 .data-table th {
+  padding-block: var(--acme-space-2);
   color: var(--acme-color-text-muted);
-  font: 600 var(--acme-text-xs) / 1.3 var(--acme-font-sans);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font: 500 var(--acme-text-xs) / 1.5 var(--acme-font-sans);
   white-space: nowrap;
 }
 
+.data-table tbody tr { transition: background-color var(--acme-duration-fast) var(--acme-ease-out); }
 .data-table tbody tr:last-child td { border-bottom: 0; }
-.data-table tbody tr:hover { background: var(--acme-color-canvas); }
+.data-table tbody tr:hover { background: var(--acme-color-surface); }
 
 .data-table .actions {
   text-align: end;
@@ -712,7 +769,9 @@ table.data-table {
   align-items: center;
   justify-content: space-between;
   gap: var(--acme-space-3);
-  padding: var(--acme-space-3) var(--acme-space-6);
+  padding: var(--acme-space-3) var(--acme-space-5);
+  border-top: 1px solid var(--app-hairline);
+  background: var(--acme-color-surface);
   font-size: var(--acme-text-sm);
   color: var(--acme-color-text-muted);
 }
@@ -720,18 +779,18 @@ table.data-table {
 /* ---------- Meter (single-series bar) ---------- */
 .meter {
   display: block;
-  height: 10px;
-  border-radius: var(--acme-radius-full);
-  background: var(--acme-color-surface);
+  height: 8px;
+  border-radius: var(--acme-radius-sm);
+  background: var(--acme-color-surface-hover);
   overflow: hidden;
 }
 .meter > span {
   display: block;
   height: 100%;
-  border-radius: var(--acme-radius-full);
+  border-radius: var(--acme-radius-sm);
   background: var(--acme-color-data);
 }
-/* Cobalt marks the single takeaway, and it is always directly labelled. */
+/* Blue marks the single takeaway, and it is always directly labelled. */
 .meter > span.is-highlight { background: var(--acme-color-data-highlight); }
 
 /* ---------- Absence timeline ---------- */
@@ -752,9 +811,8 @@ table.data-table {
 }
 
 .timeline .t-head {
-  font: 600 var(--acme-text-xs) / 1.3 var(--acme-font-sans);
-  letter-spacing: 0.04em;
-  color: var(--acme-color-text-subtle);
+  font: 500 var(--acme-text-xs) / 1.3 var(--acme-font-sans);
+  color: var(--acme-color-text-muted);
 }
 .timeline .t-head.ruled {
   border-left: 1px solid var(--app-hairline);
@@ -762,23 +820,25 @@ table.data-table {
 }
 .timeline .t-head.centred { text-align: center; }
 
+/* Approved absence: the info set (soft fill, soft text, hairline). */
 .timeline .t-bar {
   height: 24px;
   padding: 0 var(--acme-space-2);
+  border: 1px solid var(--acme-color-info-border);
   border-radius: var(--acme-radius-sm);
-  background: var(--acme-gray-100);
-  color: var(--acme-gray-700);
-  font: 600 var(--acme-text-xs) / 22px var(--acme-font-sans);
+  background: var(--acme-color-info-soft);
+  color: var(--acme-color-info-soft-text);
+  font: 500 var(--acme-text-xs) / 22px var(--acme-font-sans);
   white-space: nowrap;
   overflow: hidden;
 }
 
-/* A request still waiting on the viewer: dashed cobalt, never fill alone. */
+/* A request still waiting: the warning set with a dashed edge, and the bar's
+   label says so — never fill alone. */
 .timeline .t-bar.is-pending {
-  background: var(--acme-color-selected-soft);
-  border: 1.5px dashed var(--acme-color-primary);
-  color: var(--acme-blue-800);
-  line-height: 19px;
+  background: var(--acme-color-warning-soft);
+  border: 1px dashed var(--acme-color-warning);
+  color: var(--acme-color-warning-soft-text);
 }
 
 .timeline .t-today {
@@ -800,12 +860,13 @@ table.data-table {
 .legend .swatch {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
-  background: var(--acme-gray-300);
+  border-radius: var(--acme-radius-sm);
+  border: 1px solid var(--acme-color-info);
+  background: var(--acme-color-info-soft);
 }
 .legend .swatch.is-pending {
-  background: var(--acme-color-selected-soft);
-  border: 1.5px dashed var(--acme-color-primary);
+  background: var(--acme-color-warning-soft);
+  border: 1px dashed var(--acme-color-warning);
 }
 .legend .swatch.is-today { width: 2px; border-radius: 0; background: var(--acme-color-primary); }
 
@@ -833,6 +894,7 @@ table.data-table {
   justify-content: space-between;
   padding: 0.125rem var(--acme-space-1) var(--acme-space-1);
   font: 600 var(--acme-text-sm) / 1.2 var(--acme-font-sans);
+  letter-spacing: var(--acme-tracking-snug);
 }
 .board-col > header > .count { color: var(--acme-color-text-muted); font-size: var(--acme-text-xs); }
 
@@ -840,14 +902,17 @@ table.data-table {
   display: grid;
   gap: var(--acme-space-3);
   padding: var(--acme-space-3);
-  border-radius: var(--acme-radius-md);
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-lg);
   background: var(--acme-color-surface-raised);
   box-shadow: var(--acme-shadow-sm);
   color: inherit;
   text-decoration: none;
-  transition: box-shadow var(--acme-duration-base) var(--acme-ease-out);
+  transition:
+    border-color var(--acme-duration-base) var(--acme-ease-out),
+    box-shadow var(--acme-duration-base) var(--acme-ease-out);
 }
-.board-card:hover { box-shadow: var(--acme-shadow-md); }
+.board-card:hover { border-color: var(--acme-color-border-control); box-shadow: var(--acme-shadow-md); }
 .board-card[aria-current='true'] { outline: 2px solid var(--acme-color-selected); outline-offset: -2px; }
 
 .board-card .b-meta {
@@ -858,7 +923,7 @@ table.data-table {
   font-size: var(--acme-text-xs);
   color: var(--acme-color-text-muted);
 }
-.board-card .b-meta .is-late { color: var(--acme-color-danger); }
+.board-card .b-meta .is-late { color: var(--acme-color-warning); font-weight: 500; }
 .board-card .b-meta .age { color: var(--acme-color-text-subtle); }
 
 /* ---------- Stage progress (candidate panel) ---------- */
@@ -870,7 +935,7 @@ table.data-table {
 }
 .stages > li { display: grid; gap: var(--acme-space-2); list-style: none; }
 .stages .s-bar { height: 4px; border-radius: var(--acme-radius-full); background: var(--acme-color-surface); }
-.stages .s-label { font: 600 var(--acme-text-xs) / 1.2 var(--acme-font-sans); color: var(--acme-color-text-subtle); }
+.stages .s-label { font: 500 var(--acme-text-xs) / 1.2 var(--acme-font-sans); color: var(--acme-color-text-subtle); }
 .stages > li.is-done .s-bar { background: var(--acme-gray-400); }
 .stages > li.is-done .s-label { color: var(--acme-color-text-muted); }
 .stages > li.is-current .s-bar { background: var(--acme-color-selected); }
@@ -890,7 +955,7 @@ table.data-table {
   border-radius: var(--acme-radius-md);
   background: var(--acme-color-surface-raised);
   color: var(--acme-color-text);
-  font: 600 var(--acme-text-sm) / 1 var(--acme-font-sans);
+  font: 500 var(--acme-text-sm) / 1 var(--acme-font-sans);
   cursor: pointer;
 }
 .rating .r-option:hover { border-color: var(--acme-color-text-subtle); }
@@ -915,16 +980,19 @@ table.data-table {
   width: min(520px, 100vw);
   display: flex;
   flex-direction: column;
+  border-inline-start: 1px solid var(--acme-color-border);
   background: var(--acme-color-surface-raised);
   box-shadow: var(--acme-shadow-lg);
 }
 
-/* A panel docked beside the sidebar rather than at the window edge. */
-.panel.panel-left {
-  inset-block: var(--acme-space-3);
-  inset-inline: calc(var(--app-sidebar-width) + var(--acme-space-4)) auto;
-  width: min(400px, calc(100vw - var(--app-sidebar-width) - var(--acme-space-8)));
-  border-radius: var(--acme-radius-lg);
+/* A panel dropped from the app bar's actions rather than the window edge. */
+.panel.panel-popover {
+  inset-block: calc(var(--app-topbar-h) + var(--acme-space-2)) auto;
+  inset-inline: auto var(--acme-space-4);
+  width: min(400px, calc(100vw - var(--acme-space-8)));
+  max-height: calc(100dvh - var(--app-topbar-h) - var(--acme-space-6));
+  border: 1px solid var(--acme-color-border);
+  border-radius: var(--acme-radius-xl);
   overflow: hidden;
 }
 
@@ -936,7 +1004,7 @@ table.data-table {
   padding: var(--acme-space-5) var(--acme-space-6);
   border-bottom: 1px solid var(--app-hairline);
 }
-.panel-header h2 { margin: 0; }
+.panel-header h2 { margin: 0; font-size: var(--acme-text-lg); }
 
 .panel-body {
   flex: 1;
@@ -956,6 +1024,7 @@ table.data-table {
   gap: var(--acme-space-2);
   padding: var(--acme-space-4) var(--acme-space-6);
   border-top: 1px solid var(--app-hairline);
+  background: var(--acme-color-surface);
 }
 .panel-footer .push { margin-left: auto; }
 
@@ -965,7 +1034,7 @@ table.data-table {
   z-index: 29;
   border: 0;
   padding: 0;
-  background: rgb(17 26 43 / 0.32);
+  background: var(--acme-color-scrim);
 }
 
 /* ---------- Dialogs ---------- */
@@ -985,12 +1054,12 @@ dialog.wide { width: min(40rem, calc(100vw - 2rem)); }
 dialog:modal { overscroll-behavior: contain; }
 
 dialog::backdrop {
-  background: rgb(17 26 43 / 0.5);
+  background: var(--acme-color-scrim);
   overflow: hidden;
   overscroll-behavior: contain;
 }
 
-dialog h2 { margin: 0 0 var(--acme-space-2); font-size: var(--acme-text-xl); }
+dialog h2 { margin: 0 0 var(--acme-space-2); font-size: var(--acme-text-lg); }
 dialog > p { margin-bottom: var(--acme-space-4); font-size: var(--acme-text-sm); color: var(--acme-color-text-muted); }
 
 .dialog-actions {
@@ -1002,8 +1071,8 @@ dialog > p { margin-bottom: var(--acme-space-4); font-size: var(--acme-text-sm);
 }
 
 /* ---------- Avatar ---------- */
-/* Slate initials, not a per-person hue: the People screens keep avatars
-   neutral so Cobalt stays rationed. */
+/* Graphite initials, not a per-person hue: avatars stay neutral so Blue is
+   kept for what you can interact with. */
 .avatar {
   --size: 2rem;
   display: inline-grid;
@@ -1013,7 +1082,7 @@ dialog > p { margin-bottom: var(--acme-space-4); font-size: var(--acme-text-sm);
   height: var(--size);
   border-radius: var(--acme-radius-full);
   overflow: hidden;
-  background: var(--acme-color-surface);
+  background: var(--acme-color-surface-hover);
   color: var(--acme-gray-700);
   font: 600 calc(var(--size) * 0.36) / 1 var(--acme-font-sans);
 }
@@ -1024,7 +1093,8 @@ dialog > p { margin-bottom: var(--acme-space-4); font-size: var(--acme-text-sm);
   object-fit: cover;
 }
 
-.avatar.is-away { background: var(--acme-red-50); color: var(--acme-red-700); }
+/* Away: the warning set; the status label beside it names the reason. */
+.avatar.is-away { background: var(--acme-color-warning-soft); color: var(--acme-color-warning-soft-text); }
 
 /* ---------- Description lists ---------- */
 .details-list {
@@ -1049,16 +1119,17 @@ dialog > p { margin-bottom: var(--acme-space-4); font-size: var(--acme-text-sm);
 }
 
 @media (max-width: 860px) {
-  .page { padding: var(--acme-space-6) var(--acme-space-5); }
+  .page { padding: var(--acme-space-8) var(--acme-space-5) var(--acme-space-12); }
   .form-bar { padding-inline: var(--acme-space-5); }
-  .panel.panel-left {
+  .panel.panel-popover {
     inset: var(--acme-space-3);
     width: auto;
+    max-height: none;
   }
 }
 
 @media (max-width: 640px) {
-  .page { padding: var(--acme-space-5) var(--acme-space-4); }
+  .page { padding: var(--acme-space-6) var(--acme-space-4) var(--acme-space-10); }
   .board { grid-template-columns: minmax(0, 1fr); }
   .row-item {
     grid-template-columns: 36px minmax(0, 1fr);

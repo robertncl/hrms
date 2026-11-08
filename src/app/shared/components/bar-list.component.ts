@@ -54,7 +54,7 @@ export type BarListItem = { label: string; value: number; link?: string | unknow
       gap: var(--acme-space-2);
       min-height: 20px;
     }
-    /* Slate carries the data; Cobalt is reserved for the one takeaway. */
+    /* Graphite carries the data; Blue is reserved for the one takeaway. */
     .bar {
       flex: 0 0 0;
       min-width: 2px;

@@ -1,8 +1,8 @@
 import { Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { environment } from 'src/environments/environment';
 import { DemoBackend } from '../demo/demo-backend';
-import { forkJoin, of } from 'rxjs';
+import { filter, forkJoin, map, of } from 'rxjs';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AuthService } from '../services/auth.service';
 import { CandidateService } from '../services/candidate.service';
@@ -15,48 +15,61 @@ import { buildDecisionQueue } from '../pages/home/decision-queue';
 import { PermissionsService } from '../services/permissions.service';
 import { Permissions } from '../infrastructure/types/permissions';
 import { FooterComponent } from '../shared/components/footer.component';
-import { IconComponent, IconName } from '../shared/components/icon.component';
+import { IconComponent } from '../shared/components/icon.component';
 import { NotificationsPanelComponent } from '../shared/components/notifications-panel.component';
 import { WordmarkComponent } from '../shared/components/wordmark.component';
 
-type NavItem = { label: string; link: string; icon: IconName; permission?: Permissions };
+type NavItem = {
+  label: string;
+  link: string;
+  /** URL prefixes that count as this destination (People also owns Projects). */
+  match: string[];
+  permission?: Permissions;
+};
 
+/**
+ * The ACME app bar holds at most five destinations, so Projects lives under
+ * People (a tab on both pages) rather than in the bar.
+ */
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Home', link: '/dashboard', icon: 'home' },
-  { label: 'People', link: '/employees', icon: 'users' },
-  { label: 'Projects', link: '/work/projects', icon: 'briefcase' },
-  { label: 'Time off', link: '/work/time-off', icon: 'calendar' },
-  { label: 'Hiring', link: '/recruitment', icon: 'user-plus', permission: 'ManageHiring' },
-  { label: 'Learning', link: '/learning', icon: 'book' },
+  { label: 'Home', link: '/dashboard', match: ['/dashboard'] },
+  { label: 'People', link: '/employees', match: ['/employees', '/work/projects'] },
+  { label: 'Time off', link: '/work/time-off', match: ['/work/time-off'] },
+  { label: 'Hiring', link: '/recruitment', match: ['/recruitment'], permission: 'ManageHiring' },
+  { label: 'Learning', link: '/learning', match: ['/learning'] },
 ];
 
 /**
- * Layout for signed-in pages.
+ * Layout for signed-in pages: the ACME top bar (wordmark, up to five
+ * destinations, then search, notifications and the signed-in user pushed
+ * right), the page in a centred 1200px container, and the footer.
  *
- * The ACME People screens have no top app bar: the sidebar carries the brand,
- * search, destinations, notifications and the signed-in user, and the page
- * starts straight at its own title. So this shell folds in what the old
- * header did rather than stacking a second bar above the content.
+ * The bar is full-width, opaque and sits at zero elevation, separated from
+ * the page only by its bottom hairline. The current destination is ink text
+ * on a surface-hover fill (the .acme-topbar__link[aria-current] rule).
  */
 @Component({
   selector: 'app-shell',
   host: { '(document:keydown)': 'onKeydown($event)' },
   template: `
     <a class="skip-link" href="#main">Skip to content</a>
-    <div class="shell">
-      <aside class="sidebar">
-        <div class="side-top">
-          <a routerLink="/dashboard" class="brand" aria-label="ACME People home"><app-wordmark /></a>
-          <button class="btn btn-icon bell" type="button" (click)="notificationsOpen.set(true)">
-            <app-icon name="bell" />
-            @if (unreadCount()) {
-              <span class="dot" aria-hidden="true"></span>
-            }
-            <span class="visually-hidden">Notifications: {{ unreadCount() }} unread</span>
-          </button>
-        </div>
+    <header class="acme-topbar topbar">
+      <a routerLink="/dashboard" class="brand" aria-label="ACME People home"><app-wordmark /></a>
 
-        <form class="search side-search" role="search" (submit)="runSearch($event)">
+      <nav class="acme-topbar__nav" aria-label="Main">
+        @for (item of navItems(); track item.link) {
+          <a class="acme-topbar__link" [routerLink]="item.link" [attr.aria-current]="isCurrent(item) ? 'page' : null">
+            {{ item.label }}
+            @if (item.link === '/dashboard' && decisionCount()) {
+              <span class="count-pill" aria-hidden="true">{{ decisionCount() }}</span>
+              <span class="visually-hidden">, {{ decisionCount() }} waiting on you</span>
+            }
+          </a>
+        }
+      </nav>
+
+      <div class="acme-topbar__actions">
+        <form class="search top-search" role="search" (submit)="runSearch($event)">
           <app-icon name="search" [size]="15" />
           <label class="visually-hidden" for="global-search">Find a person</label>
           <input id="global-search" #searchInput name="q" type="search" placeholder="Find a person"
@@ -64,50 +77,42 @@ const NAV_ITEMS: NavItem[] = [
           <kbd aria-hidden="true">{{ shortcutHint }}</kbd>
         </form>
 
-        <nav aria-label="Main">
-          @for (item of navItems(); track item.link) {
-            <a [routerLink]="item.link" routerLinkActive="active" ariaCurrentWhenActive="page">
-              <app-icon [name]="item.icon" />
-              <span>{{ item.label }}</span>
-              @if (item.link === '/dashboard' && decisionCount()) {
-                <span class="count-pill">{{ decisionCount() }}</span>
-              }
-            </a>
-          }
-        </nav>
+        @if (isDemo) {
+          <button class="btn btn-icon" type="button" (click)="resetDemo()" title="Reset demo data">
+            <app-icon name="refresh" [size]="16" />
+            <span class="visually-hidden">Reset demo data</span>
+          </button>
+        }
 
-        <div class="side-foot">
-          @if (isDemo) {
-            <div class="demo-row">
-              <span class="tag">Demo data</span>
-              <button class="btn btn-icon" type="button" (click)="resetDemo()" title="Reset demo data">
-                <app-icon name="refresh" [size]="15" />
-                <span class="visually-hidden">Reset demo data</span>
-              </button>
-            </div>
+        <button class="btn btn-icon bell" type="button" (click)="notificationsOpen.set(true)">
+          <app-icon name="bell" [size]="18" />
+          @if (unreadCount()) {
+            <span class="dot" aria-hidden="true"></span>
           }
-          @if (user(); as user) {
-            <div class="user">
-              <span class="initials" aria-hidden="true">{{ initials() }}</span>
-              <span class="who">
-                <strong>{{ user.name }}</strong>
-                <span>{{ user.role }}</span>
-              </span>
-              <button class="btn btn-icon" type="button" (click)="signOut()" title="Sign out">
-                <app-icon name="log-out" [size]="16" />
-                <span class="visually-hidden">Sign out</span>
-              </button>
-            </div>
-          }
-        </div>
-      </aside>
+          <span class="visually-hidden">Notifications: {{ unreadCount() }} unread</span>
+        </button>
 
-      <div class="main">
-        <main id="main" class="content" tabindex="-1">
-          <router-outlet />
-        </main>
-        <app-footer />
+        @if (user(); as user) {
+          <div class="user">
+            <span class="initials" aria-hidden="true">{{ initials() }}</span>
+            <span class="who">
+              <strong>{{ user.name }}</strong>
+              <span>{{ user.role }}</span>
+            </span>
+            <button class="btn btn-icon" type="button" (click)="signOut()" title="Sign out">
+              <app-icon name="log-out" [size]="16" />
+              <span class="visually-hidden">Sign out</span>
+            </button>
+          </div>
+        }
       </div>
+    </header>
+
+    <div class="main">
+      <main id="main" class="content" tabindex="-1">
+        <router-outlet />
+      </main>
+      <app-footer />
     </div>
 
     @if (notificationsOpen()) {
@@ -121,104 +126,57 @@ const NAV_ITEMS: NavItem[] = [
       top: -3rem;
       z-index: 40;
       padding: var(--acme-space-2) var(--acme-space-3);
-      border-radius: var(--acme-radius-sm);
+      border-radius: var(--acme-radius-md);
       background: var(--acme-color-primary);
       color: var(--acme-color-on-primary);
     }
-    .skip-link:focus { top: var(--acme-space-4); }
+    .skip-link:focus { top: var(--acme-space-2); }
 
-    .shell {
-      display: grid;
-      grid-template-columns: var(--app-sidebar-width) minmax(0, 1fr);
-      min-height: 100dvh;
-    }
-
-    .sidebar {
+    /* Sticky but still opaque and at zero elevation: only the hairline. */
+    .topbar {
       position: sticky;
       top: 0;
-      height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      gap: var(--acme-space-6);
-      padding: var(--acme-space-5) var(--acme-space-3);
-      background: var(--acme-color-surface-raised);
-      border-inline-end: 1px solid var(--app-hairline);
+      z-index: 20;
+      min-block-size: var(--app-topbar-h);
     }
 
-    .side-top {
-      display: flex;
+    .brand { display: inline-flex; text-decoration: none; }
+
+    .acme-topbar__link {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
       gap: var(--acme-space-2);
-      padding-inline: var(--acme-space-2);
-    }
-    .brand { text-decoration: none; }
-
-    .bell { position: relative; }
-    .dot {
-      position: absolute;
-      top: 4px;
-      right: 5px;
-      width: 8px;
-      height: 8px;
-      border-radius: var(--acme-radius-full);
-      background: var(--acme-color-primary);
-      border: 2px solid var(--acme-color-surface-raised);
+      white-space: nowrap;
     }
 
-    .side-search {
-      flex: none;
-      min-height: 36px;
-      border-color: var(--app-hairline);
-      background: var(--acme-color-canvas);
-      font-size: var(--acme-text-sm);
+    .top-search {
+      flex: 0 1 15rem;
+      min-height: 2.25rem;
     }
-    .side-search kbd {
+    .top-search kbd {
       font: 500 11px var(--acme-font-mono);
       color: var(--acme-color-text-subtle);
     }
 
-    nav { display: flex; flex-direction: column; gap: 2px; }
-
-    nav a {
-      display: flex;
-      align-items: center;
-      gap: var(--acme-space-3);
-      padding: 9px var(--acme-space-3);
-      border-radius: var(--acme-radius-md);
-      color: var(--acme-color-text-muted);
-      font-size: var(--acme-text-sm);
-      font-weight: 500;
-      text-decoration: none;
-      white-space: nowrap;
-    }
-    nav a:hover { background: var(--acme-color-surface); color: var(--acme-color-text); }
-    nav a.active {
-      background: var(--acme-color-selected-soft);
-      color: var(--acme-color-selected);
-      font-weight: 600;
-    }
-    nav a .count-pill { margin-left: auto; }
-
-    .side-foot {
-      margin-top: auto;
-      display: grid;
-      gap: var(--acme-space-3);
-    }
-
-    .demo-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding-inline: var(--acme-space-2);
+    .bell { position: relative; }
+    .dot {
+      position: absolute;
+      top: 5px;
+      right: 6px;
+      width: 8px;
+      height: 8px;
+      border-radius: var(--acme-radius-full);
+      background: var(--acme-color-info);
+      border: 2px solid var(--acme-color-canvas);
     }
 
     .user {
       display: flex;
       align-items: center;
-      gap: var(--acme-space-3);
-      padding: var(--acme-space-3) var(--acme-space-2) 0;
-      border-top: 1px solid var(--app-hairline);
+      gap: var(--acme-space-2);
+      padding-inline-start: var(--acme-space-3);
+      margin-inline-start: var(--acme-space-1);
+      border-inline-start: 1px solid var(--acme-color-border);
     }
     .initials {
       display: grid;
@@ -227,32 +185,35 @@ const NAV_ITEMS: NavItem[] = [
       height: 32px;
       flex: none;
       border-radius: var(--acme-radius-full);
-      background: var(--acme-blue-100);
-      color: var(--acme-blue-800);
+      background: var(--acme-color-surface-hover);
+      color: var(--acme-gray-700);
       font: 600 12px var(--acme-font-sans);
     }
-    .who { display: grid; flex: 1; min-width: 0; line-height: 1.25; }
-    .who strong { font-size: 13px; }
-    .who > span { font-size: 12px; color: var(--acme-color-text-muted); }
+    .who { display: grid; min-width: 0; line-height: 1.25; }
+    .who strong { font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .who > span { font-size: 12px; color: var(--acme-color-text-muted); white-space: nowrap; }
 
-    .main { display: flex; flex-direction: column; min-width: 0; }
+    .main { display: flex; flex-direction: column; min-height: calc(100dvh - var(--app-topbar-h)); }
     .content { flex: 1; }
     .content:focus { outline: none; }
 
+    @media (max-width: 1180px) {
+      .who { display: none; }
+    }
+
+    /* Narrow screens: the destinations drop to their own scrolling row and
+       the search moves to the People page's own filter. */
     @media (max-width: 860px) {
-      .shell { grid-template-columns: minmax(0, 1fr); }
-      .sidebar {
-        position: static;
-        height: auto;
-        gap: var(--acme-space-3);
-        padding: var(--acme-space-3) var(--acme-space-4);
-        border-inline-end: 0;
-        border-bottom: 1px solid var(--app-hairline);
+      .topbar { flex-wrap: wrap; row-gap: 0; padding-block-end: 0; }
+      .acme-topbar__nav {
+        order: 3;
+        flex: 1 0 100%;
+        margin-inline: calc(-1 * var(--acme-space-5));
+        padding: var(--acme-space-1) var(--acme-space-5) var(--acme-space-2);
+        overflow-x: auto;
+        scrollbar-width: none;
       }
-      .side-search { display: none; }
-      nav { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
-      .side-foot { margin-top: 0; }
-      .user { border-top: 0; padding-top: 0; }
+      .top-search { display: none; }
     }
   `,
   // Default change detection on purpose: routed pages render inside this
@@ -261,7 +222,6 @@ const NAV_ITEMS: NavItem[] = [
   imports: [
     RouterOutlet,
     RouterLink,
-    RouterLinkActive,
     FooterComponent,
     IconComponent,
     WordmarkComponent,
@@ -290,6 +250,14 @@ export class ShellComponent {
     NAV_ITEMS.filter((item) => !item.permission || (item.permission === 'ManageHiring' && this.canHire())),
   );
 
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+
   user = this.authService.currentUser;
   notificationsOpen = signal(false);
   term = signal('');
@@ -308,7 +276,7 @@ export class ShellComponent {
   );
 
   /**
-   * The Home badge counts the same items the Home queue lists, so the sidebar
+   * The Home count shows the same items the Home queue lists, so the app bar
    * and the page never disagree about how much is waiting.
    */
   decisionCount = computed(() => {
@@ -348,13 +316,18 @@ export class ShellComponent {
     this.notificationService.connect();
   }
 
+  isCurrent(item: NavItem): boolean {
+    const path = this.url().split(/[?#]/)[0];
+    return item.match.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  }
+
   runSearch(event: Event) {
     event.preventDefault();
     const q = this.term().trim();
     this.router.navigate(['/employees'], { queryParams: q ? { q } : {} });
   }
 
-  /** The sidebar hint promises Cmd/Ctrl+K, so make it true. */
+  /** The search hint promises Cmd/Ctrl+K, so make it true. */
   onKeydown(event: KeyboardEvent) {
     if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

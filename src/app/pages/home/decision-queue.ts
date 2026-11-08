@@ -6,6 +6,7 @@ import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.ty
 import {
   DAY_MS,
   clashInfo,
+  absenceType,
   dayCount,
   formatRange,
   midnight,
@@ -33,7 +34,12 @@ export type QueueItem = {
   what: string;
   note: string;
   tag?: string;
-  /** Urgent items take the danger tag and are counted in the page summary. */
+  /**
+   * Which ACME status set the tag takes: a deadline or clash is a warning,
+   * anything already overdue is danger.
+   */
+  tone?: 'warning' | 'danger';
+  /** Urgent items float to the top and are counted in the page summary. */
   urgent: boolean;
   primary: string;
   secondary: string;
@@ -76,9 +82,10 @@ function timeOffItems(
         id: `timeoff-${request.id}`,
         kind: 'timeoff' as const,
         name: names.get(request.employeeId) ?? `Employee #${request.employeeId}`,
-        what: `${request.type} · ${formatRange(request.startDate, request.endDate)}`,
+        what: `${absenceType(request.type)} · ${formatRange(request.startDate, request.endDate)}`,
         note: `${days} ${days === 1 ? 'day' : 'days'} · ${clashText}${comment ? ` “${comment}”` : ''}`,
         tag,
+        tone: tag ? ('warning' as const) : undefined,
         urgent: imminent,
         primary: 'Approve',
         secondary: 'Open',
@@ -113,6 +120,7 @@ function hiringItems(candidates: Candidate[], employees: Employee[], today: Date
           ? `${interviewer} interviewed ${daysSince > 0 ? `${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago` : 'today'} and hasn't scored yet.`
           : 'Waiting on interview scores.',
         tag: overdue ? 'Overdue' : undefined,
+        tone: overdue ? ('danger' as const) : undefined,
         urgent: overdue,
         primary: 'Review',
         secondary: 'Open',
@@ -160,6 +168,7 @@ function trainingItems(
         enrollment.dueDate ? `, due ${formatRange(enrollment.dueDate, enrollment.dueDate)}` : ''
       }. ${enrollment.progress}% done.`,
       tag: 'Overdue',
+      tone: 'danger' as const,
       urgent: true,
       primary: 'Open',
       secondary: 'View course',

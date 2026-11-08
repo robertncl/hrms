@@ -138,11 +138,25 @@ describe('EmployeeListComponent', () => {
     expect(rowNames()).toEqual(['Jane Smith']);
   });
 
-  it('should show availability as a labelled status, never colour alone', () => {
-    const statuses = Array.from(
-      fixture.debugElement.nativeElement.querySelectorAll('tbody .status') as NodeListOf<HTMLElement>,
-    ).map((s) => s.textContent!.trim());
-    expect(statuses).toEqual(['In today', 'Vacation until 31 Dec']);
+  it('should show availability as a labelled status badge, never colour alone', () => {
+    const badges = Array.from(
+      fixture.debugElement.nativeElement.querySelectorAll('tbody .status-badge') as NodeListOf<HTMLElement>,
+    );
+    expect(badges.map((s) => s.textContent!.trim())).toEqual(['In today', 'Vacation until 31 Dec']);
+    // Away takes the info set and its glyph; "In today" stays neutral.
+    expect(badges[0].classList).not.toContain('badge-info');
+    expect(badges[1].classList).toContain('badge-info');
+    expect(badges[1].querySelector('app-status-icon svg')).not.toBeNull();
+  });
+
+  it('should filter by role from the tabs', () => {
+    const tabs = Array.from(
+      fixture.debugElement.nativeElement.querySelectorAll('[role="tab"]') as NodeListOf<HTMLButtonElement>,
+    );
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    tabs.find((t) => t.textContent!.includes('Designers'))!.click();
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['Jane Smith']);
   });
 
   it('should list the projects somebody is on', () => {

@@ -2,12 +2,12 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { WordmarkComponent } from './wordmark.component';
 
 /**
- * Split layout for the signed-out pages: the form on the left, and a navy
- * panel on the right carrying the product promise over a photograph.
+ * Split layout for the signed-out pages: the form on the left, and a dark
+ * Graphite panel on the right carrying the product promise over a photograph.
  *
  * The panel is the one dark surface in a light-only system, so nothing on it
- * keys off a light-page token — the kicker is pinned to blue-200, which clears
- * contrast on blue-900 where the page's accent would not.
+ * keys off a light-page token: its text is pinned to Graphite 0 and 300, the
+ * colours the system's dark deck bookends use on Graphite 950.
  */
 @Component({
   selector: 'app-auth-layout',
@@ -76,7 +76,7 @@ import { WordmarkComponent } from './wordmark.component';
       justify-content: flex-end;
       padding: var(--acme-space-16);
       overflow: hidden;
-      background: var(--acme-blue-900);
+      background: var(--acme-gray-950);
       color: var(--acme-gray-0);
     }
     .promo img {
@@ -89,28 +89,27 @@ import { WordmarkComponent } from './wordmark.component';
     }
 
     /* The photograph alone cannot guarantee contrast for the kicker and
-       headline, and AA is a design-system non-negotiable. This is the same
-       navy scrim the project hero uses. */
+       headline, and AA is a design-system non-negotiable. A flat scrim (the
+       system has no gradients) darkens it evenly. */
     .promo::after {
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(180deg, rgb(10 17 30 / 0.1), rgb(10 17 30 / 0.72));
+      background: var(--acme-color-scrim);
     }
 
     .promo-body { position: relative; z-index: 1; max-width: 460px; }
     .promo-kicker {
       display: block;
       margin-bottom: var(--acme-space-3);
-      font: 600 var(--acme-text-xs) / 1.2 var(--acme-font-sans);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      /* Pinned: the page accent would sit at ~2.2:1 on this navy. */
-      color: var(--acme-blue-200);
+      font: 500 var(--acme-text-sm) / 1.2 var(--acme-font-sans);
+      /* Pinned: light-page tokens would fail contrast on this dark panel. */
+      color: var(--acme-gray-300);
     }
     .promo-body p {
       margin: 0;
-      font: 700 var(--acme-text-3xl) / 1.25 var(--acme-font-display);
+      font: 600 var(--acme-text-3xl) / 1.25 var(--acme-font-display);
+      letter-spacing: var(--acme-tracking-tight);
     }
 
     @media (max-width: 960px) {

@@ -4,6 +4,11 @@ import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.ty
 export const DAY_MS = 86_400_000;
 
 /** Midnight local time for an ISO (yyyy-mm-dd) date. */
+/** "Sick Leave" → "Sick leave": the design system sets labels in sentence case. */
+export function absenceType(type: TimeOffRequest['type']): string {
+  return type.charAt(0) + type.slice(1).toLowerCase();
+}
+
 export function parseDay(date: string): number {
   return new Date(`${date}T00:00:00`).getTime();
 }

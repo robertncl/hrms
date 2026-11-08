@@ -2,7 +2,9 @@ import { NgComponentOutlet } from '@angular/common';
 import {
   ChangeDetectorRef,
   Component,
+  ElementRef,
   Type,
+  viewChildren,
   computed,
   inject,
   input,
@@ -19,6 +21,8 @@ import { ProjectService } from 'src/app/services/project.service';
 import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { IconComponent } from 'src/app/shared/components/icon.component';
+import { PeopleSectionsComponent } from 'src/app/shared/components/people-sections.component';
+import { StatusIconComponent, StatusVariant } from 'src/app/shared/components/status-icon.component';
 import { awayLabels, employeeProjectNames, toCsv } from './people-table';
 
 const PAGE_SIZE = 12;
@@ -27,6 +31,7 @@ const PAGE_SIZE = 12;
   selector: 'app-employee-list',
   template: `
     <div class="page">
+      <app-people-sections />
       <div class="page-header">
         <div>
           <h1>People</h1>
@@ -40,6 +45,16 @@ const PAGE_SIZE = 12;
         </div>
       </div>
 
+      <div class="filters">
+      <div class="tabs" role="tablist" aria-label="Filter by role">
+        @for (chip of chips(); track chip.position; let i = $index) {
+          <button #roleTab class="tab" type="button" role="tab" aria-controls="people-table"
+            [attr.aria-selected]="positionFilter() === chip.position"
+            [tabIndex]="positionFilter() === chip.position ? 0 : -1"
+            (click)="setPosition(chip.position)" (keydown)="onTabKey($event, i)">{{ chip.label }} <span class="tab-count">{{ chip.count }}</span></button>
+        }
+      </div>
+
       <div class="toolbar" role="search">
         <div class="search">
           <app-icon name="search" [size]="16" />
@@ -48,21 +63,16 @@ const PAGE_SIZE = 12;
             [value]="search()" (input)="onSearch($any($event.target).value)" />
         </div>
 
-        <div class="chips">
-          @for (chip of chips(); track chip.position) {
-            <button class="chip" type="button" [attr.aria-pressed]="positionFilter() === chip.position"
-              (click)="setPosition(chip.position)">{{ chip.label }} {{ chip.count }}</button>
-          }
-        </div>
 
         <label class="acme-switch push">
           <span>Away only</span>
           <input type="checkbox" [checked]="awayOnly()" (change)="setAwayOnly($any($event.target).checked)" />
         </label>
       </div>
+      </div>
 
       <div class="table-wrap">
-        <table class="data-table stack">
+        <table id="people-table" class="data-table stack">
           <thead>
             <tr>
               <th scope="col">Name</th>
@@ -91,7 +101,11 @@ const PAGE_SIZE = 12;
                 <td data-label="Role">{{ employee.position }}</td>
                 <td class="muted" data-label="Level">{{ employee.level }}</td>
                 <td data-label="Status">
-                  <span class="status" [class.is-away]="!employee.isAvailable">
+                  @let tone = statusTone(employee);
+                  <span class="badge status-badge" [class.badge-info]="tone === 'info'" [class.badge-warning]="tone === 'warning'">
+                    @if (tone) {
+                      <app-status-icon [variant]="tone" [size]="12" />
+                    }
                     {{ statusLabel(employee) }}
                   </span>
                 </td>
@@ -146,6 +160,7 @@ const PAGE_SIZE = 12;
       text-overflow: ellipsis;
     }
     .pager { display: flex; gap: var(--acme-space-2); }
+    .filters { display: grid; gap: var(--acme-space-4); }
     .acme-switch { flex-direction: row-reverse; color: var(--acme-color-text-muted); }
 
     @media (max-width: 640px) {
@@ -153,7 +168,7 @@ const PAGE_SIZE = 12;
     }
   `,
   standalone: true,
-  imports: [NgComponentOutlet, RouterLink, AvatarComponent, IconComponent],
+  imports: [NgComponentOutlet, RouterLink, AvatarComponent, IconComponent, PeopleSectionsComponent, StatusIconComponent],
 })
 export class EmployeeListComponent {
   private readonly employeeService = inject(EmployeeService);
@@ -168,7 +183,9 @@ export class EmployeeListComponent {
 
   readonly positions: Employee['position'][] = ['Developer', 'Designer', 'QA', 'Manager'];
 
-  /** Bound from `?position=` (links from Home) and `?q=` (sidebar search). */
+  private readonly roleTabs = viewChildren<ElementRef<HTMLButtonElement>>('roleTab');
+
+  /** Bound from `?position=` (links from Home) and `?q=` (app bar search). */
   position = input<string>('');
   query = input<string>('', { alias: 'q' });
 
@@ -202,7 +219,7 @@ export class EmployeeListComponent {
   chips = computed(() => {
     const employees = this.employees();
     return [
-      { position: '', label: 'All', count: employees.length },
+      { position: '', label: 'Everyone', count: employees.length },
       ...this.positions.map((position) => ({
         position,
         label: `${position}s`,
@@ -244,6 +261,27 @@ export class EmployeeListComponent {
 
   statusLabel(employee: Employee): string {
     return employee.isAvailable ? 'In today' : (this.away()[employee.id] ?? 'Away');
+  }
+
+  /** In today stays neutral; sick leave is a warning, any other absence info. */
+  statusTone(employee: Employee): StatusVariant | null {
+    if (employee.isAvailable) return null;
+    return this.statusLabel(employee).startsWith('Sick') ? 'warning' : 'info';
+  }
+
+  /** Arrow keys, Home and End move between the role tabs. */
+  onTabKey(event: KeyboardEvent, index: number) {
+    const chips = this.chips();
+    const next =
+      event.key === 'ArrowRight' ? (index + 1) % chips.length
+      : event.key === 'ArrowLeft' ? (index - 1 + chips.length) % chips.length
+      : event.key === 'Home' ? 0
+      : event.key === 'End' ? chips.length - 1
+      : null;
+    if (next === null) return;
+    event.preventDefault();
+    this.setPosition(chips[next].position);
+    this.roleTabs()[next]?.nativeElement.focus();
   }
 
   // Filtering changes the result set, so start again from the first page.

@@ -57,7 +57,7 @@ Dates are relative to today, so the demo always looks current.
 - **As the Employee,** book time off (it can only be for Charlotte), withdraw it, and log a module on her overdue security course.
 - **As the HR Administrator,** change someone's phone number, or remove a person.
 
-Changes are saved to `localStorage`, so they survive a reload. The refresh button at the bottom of the sidebar restores the original data. Data saved by an older version is upgraded in place, keeping your changes.
+Changes are saved to `localStorage`, so they survive a reload. The refresh button in the top bar, beside the notifications bell, restores the original data. Data saved by an older version is upgraded in place, keeping your changes.
 
 ### Using a real API
 

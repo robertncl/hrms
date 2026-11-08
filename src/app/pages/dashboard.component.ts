@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChildren } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -8,14 +8,14 @@ import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
 import { CourseService } from '../services/course.service';
 import { EnrollmentService } from '../services/enrollment.service';
-import { completionRate, isOverdue } from './learning/learning';
 import { AuthService } from '../services/auth.service';
 import { PermissionsService } from '../services/permissions.service';
 import { Employee } from '../infrastructure/types/employee';
-import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { AvatarComponent } from '../shared/components/avatar.component';
+import { StatusIconComponent } from '../shared/components/status-icon.component';
 import { candidateStage } from '../shared/functions/status-badge';
-import { QueueKind, QueueViewer, buildDecisionQueue, countByKind } from './home/decision-queue';
+import { awayLabels } from './employees/people-table';
+import { QueueItem, QueueKind, QueueViewer, buildDecisionQueue, countByKind } from './home/decision-queue';
 import { WeekBar, nextWeekBars, nextWeekDays, nextWeekRange } from './home/week-strip';
 
 const POSITIONS: Employee['position'][] = ['Developer', 'Designer', 'QA', 'Manager'];
@@ -23,20 +23,32 @@ const PIPELINE_STAGES = ['CV evaluation', 'Interview preparation', 'Interview Fe
 const PIPELINE_LABELS = ['New', 'Interview', 'Feedback', 'Offer', 'Onboarding'];
 const VISIBLE_QUEUE = 6;
 
+/** "A, B and C". */
+function listJoin(parts: string[]): string {
+  return parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * Home, built to the ACME People design: the day's context and greeting, an
+ * info alert naming who is out today, then the decision queue (underline tabs
+ * with counts, status badges with their glyphs) beside a rail of cards for
+ * next week's absences, the team and the hiring pipeline.
+ */
 @Component({
   selector: 'app-dashboard',
   template: `
     <div class="page">
       <div class="page-header">
-        <div>
-          <div class="kicker">{{ today | date: 'EEEE, d MMMM' }}</div>
+        <div class="intro">
+          <span class="kicker">{{ today | date: 'EEEE, d MMMM' }}</span>
           <h1>{{ greeting() }}</h1>
           <p>{{ summary() }}</p>
         </div>
         @if (canRequestTimeOff() || canAddPeople()) {
           <div class="page-actions">
             @if (canRequestTimeOff()) {
-              <a class="btn" routerLink="/work/time-off">Request time off</a>
+              <!-- One solid action per view: this is it unless "Add person" is offered. -->
+              <a class="btn" [class.btn-primary]="!canAddPeople()" routerLink="/work/time-off">Request time off</a>
             }
             @if (canAddPeople()) {
               <a class="btn btn-primary" routerLink="/employees/create">Add person</a>
@@ -46,58 +58,91 @@ const VISIBLE_QUEUE = 6;
       </div>
 
       @if (data(); as data) {
-        <div class="split">
-          <section class="card flush" aria-labelledby="queue-title">
-            <div class="card-header">
-              <h2 id="queue-title">Needs your decision</h2>
-              <div class="chips">
-                @for (tab of tabs(); track tab.kind) {
-                  <button class="chip" type="button" [attr.aria-pressed]="kind() === tab.kind"
-                    (click)="kind.set(tab.kind)">{{ tab.label }} {{ tab.count }}</button>
+        @if (outToday(); as out) {
+          <div class="acme-alert" role="status">
+            <span class="acme-alert__icon"><app-status-icon variant="info" /></span>
+            <div>
+              <p class="acme-alert__title">{{ out.title }}</p>
+              <p>{{ out.body }}</p>
+            </div>
+          </div>
+        }
+
+        @if (approved()) {
+          <div class="acme-alert acme-alert--success" role="status">
+            <span class="acme-alert__icon"><app-status-icon variant="success" /></span>
+            <div>
+              <p class="acme-alert__title">Saved.</p>
+              <p>{{ approved() }}</p>
+            </div>
+          </div>
+        }
+
+        <div class="layout">
+          <section class="card flush queue" aria-labelledby="queue-title">
+            <div class="queue-head">
+              <div class="card-header">
+                <h2 id="queue-title">Needs your decision</h2>
+                <span class="small muted">Soonest first</span>
+              </div>
+              <div class="tabs" role="tablist" aria-label="Filter decisions">
+                @for (tab of tabs(); track tab.kind; let i = $index) {
+                  <button #tabButton class="tab" type="button" role="tab" [id]="'queue-tab-' + tab.kind"
+                    aria-controls="queue-panel" [attr.aria-selected]="kind() === tab.kind"
+                    [tabIndex]="kind() === tab.kind ? 0 : -1"
+                    (click)="selectKind(tab.kind)" (keydown)="onTabKey($event, i)">{{ tab.label }} <span class="tab-count">{{ tab.count }}</span></button>
                 }
               </div>
             </div>
 
-            @if (visibleQueue().length) {
-              <div class="rows">
-                @for (item of visibleQueue(); track item.id) {
-                  <div class="row-item">
-                    <app-avatar [name]="item.name" size="2.25rem" />
-                    <div class="row-body">
-                      <div class="row-title">
-                        <strong>{{ item.name }}</strong>
-                        <span class="what">{{ item.what }}</span>
-                        @if (item.tag) {
-                          <span class="badge" [class.badge-critical]="item.urgent">{{ item.tag }}</span>
+            <div id="queue-panel" role="tabpanel" [attr.aria-labelledby]="'queue-tab-' + kind()">
+              @if (visibleQueue().length) {
+                <div class="rows">
+                  @for (item of visibleQueue(); track item.id) {
+                    <div class="row-item">
+                      <app-avatar [name]="item.name" size="2.25rem" />
+                      <div class="row-body">
+                        <div class="row-title">
+                          <strong>{{ item.name }}</strong>
+                          <span class="what">{{ item.what }}</span>
+                          @if (item.tag) {
+                            <span class="badge" [class.badge-warning]="item.tone === 'warning'"
+                              [class.badge-critical]="item.tone === 'danger'">
+                              @if (item.tone) {
+                                <app-status-icon [variant]="item.tone" [size]="12" />
+                              }
+                              {{ item.tag }}
+                            </span>
+                          }
+                        </div>
+                        <span class="row-note">{{ item.note }}</span>
+                      </div>
+                      <div class="row-actions">
+                        <a class="btn btn-sm btn-ghost" [routerLink]="item.link">{{ item.secondary }}</a>
+                        @if (item.request) {
+                          <button class="btn btn-sm" type="button" [disabled]="busy()"
+                            (click)="approve(item)">Approve</button>
+                        } @else {
+                          <a class="btn btn-sm" [routerLink]="item.link">{{ item.primary }}</a>
                         }
                       </div>
-                      <span class="row-note">{{ item.note }}</span>
                     </div>
-                    <div class="row-actions">
-                      <a class="btn btn-sm btn-ghost" [routerLink]="item.link">{{ item.secondary }}</a>
-                      @if (item.request) {
-                        <button class="btn btn-sm" type="button" [disabled]="busy()"
-                          (click)="approve(item.request)">Approve</button>
-                      } @else {
-                        <a class="btn btn-sm" [routerLink]="item.link">{{ item.primary }}</a>
-                      }
-                    </div>
+                  }
+                </div>
+                @if (hiddenCount()) {
+                  <div class="rows-footer">
+                    <button class="link-btn" type="button" (click)="showAll.set(true)">
+                      Show {{ hiddenCount() }} more
+                    </button>
                   </div>
                 }
-              </div>
-              @if (hiddenCount()) {
-                <div class="rows-footer">
-                  <button class="link-btn" type="button" (click)="showAll.set(true)">
-                    Show {{ hiddenCount() }} more
-                  </button>
-                </div>
+              } @else {
+                <p class="empty-state">Nothing waiting on you. Enjoy it while it lasts.</p>
               }
-            } @else {
-              <p class="empty-state">Nothing waiting on you. Enjoy it while it lasts.</p>
-            }
+            </div>
           </section>
 
-          <div class="stack">
+          <div class="rail">
             <section class="card" aria-labelledby="week-title">
               <div class="card-header">
                 <h2 id="week-title">Who's out next week</h2>
@@ -139,7 +184,7 @@ const VISIBLE_QUEUE = 6;
                   <span class="meter">
                     <span [class.is-highlight]="row.highlight" [style.width.%]="row.percent"></span>
                   </span>
-                  <span class="b-value num">{{ row.value }}</span>
+                  <span class="b-value num" [class.is-highlight]="row.highlight">{{ row.value }}</span>
                 }
               </div>
             </section>
@@ -168,7 +213,34 @@ const VISIBLE_QUEUE = 6;
     </div>
   `,
   styles: `
-    .page-header .kicker { margin-bottom: var(--acme-space-2); }
+    .intro { display: grid; gap: var(--acme-space-2); min-width: 0; }
+    .intro h1 { font-size: 2rem; }
+    .page-header p { margin-top: 0; }
+
+    /* Main queue beside a rail: the rail drops below on narrow screens. */
+    .layout {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: var(--acme-space-6);
+    }
+    .queue { flex: 999 1 560px; min-width: 0; }
+    .rail {
+      flex: 1 1 360px;
+      min-width: 0;
+      display: grid;
+      gap: var(--acme-space-6);
+      align-content: start;
+    }
+
+    .queue-head {
+      display: grid;
+      gap: var(--acme-space-4);
+      padding: var(--acme-space-5) var(--acme-space-5) 0;
+    }
+    .queue-head .card-header { margin: 0; padding: 0; }
+    .queue-head .tabs { border-bottom: 0; }
+    .rows .row-item:first-child { border-top-color: var(--acme-color-border); }
 
     .link-btn {
       border: 0;
@@ -178,10 +250,11 @@ const VISIBLE_QUEUE = 6;
       font: inherit;
       cursor: pointer;
     }
-    .link-btn:hover { text-decoration: underline; }
+    .link-btn:hover { color: var(--acme-color-link-hover); text-decoration: underline; }
 
     /* Mon-Fri strip: a name column plus one column per working day. */
-    .timeline.week { grid-template-columns: 110px repeat(5, minmax(0, 1fr)); column-gap: 4px; }
+    .timeline.week { grid-template-columns: 128px repeat(5, minmax(0, 1fr)); column-gap: 4px; }
+    .legend { margin-top: var(--acme-space-4); }
 
     .headcount {
       display: flex;
@@ -189,48 +262,50 @@ const VISIBLE_QUEUE = 6;
       gap: var(--acme-space-3);
       margin-bottom: var(--acme-space-4);
     }
-    .headcount strong { font: 700 var(--acme-text-4xl) / 1 var(--acme-font-display); }
+    .headcount strong {
+      font: 600 2.5rem / 1 var(--acme-font-sans);
+      letter-spacing: var(--acme-tracking-tight);
+      font-variant-numeric: tabular-nums;
+    }
 
     .bars {
       display: grid;
-      grid-template-columns: 80px minmax(0, 1fr) 24px;
-      gap: var(--acme-space-2) var(--acme-space-3);
+      grid-template-columns: 88px minmax(0, 1fr) 24px;
+      gap: 10px var(--acme-space-3);
       align-items: center;
-      font-size: var(--acme-text-sm);
+      font-size: 0.8125rem;
     }
-    .b-label { color: var(--acme-color-text-muted); text-decoration: none; }
+    .b-label { color: var(--acme-color-text); text-decoration: none; }
     .b-label:hover { color: var(--acme-color-link); text-decoration: underline; }
-    .b-value { font-weight: 600; text-align: right; }
+    .b-value { text-align: right; }
+    .b-value.is-highlight { font-weight: 600; }
 
+    /* One row per stage, label then count: five tiles abreast in a 360px
+       rail cut "Interview" and "Onboarding" short. */
     .pipeline {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
       margin: 0;
       padding: 0;
       list-style: none;
-      border: 1px solid var(--app-hairline);
-      border-radius: var(--acme-radius-md);
-      overflow: hidden;
+      font-size: 0.8125rem;
     }
     .pipeline li {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-      padding: var(--acme-space-2) var(--acme-space-1) var(--acme-space-3);
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--acme-space-3);
+      padding: var(--acme-space-2) 0;
+      border-top: 1px solid var(--acme-color-border);
     }
-    .pipeline li + li { border-left: 1px solid var(--app-hairline); }
-    .pipeline strong { font: 700 var(--acme-text-2xl) / 1.1 var(--acme-font-display); }
-    /* Five stage names in one row is tight: shrink the label a step rather
-       than breaking "Onboarding" across lines. */
-    .pipeline span {
-      font-size: 10px;
-      line-height: 1.3;
-      letter-spacing: -0.01em;
-      color: var(--acme-color-text-muted);
-      white-space: nowrap;
+    .pipeline li:first-child { border-top: 0; padding-top: 0; }
+    .pipeline li:last-child { padding-bottom: 0; }
+    .pipeline span { order: -1; color: var(--acme-color-text); }
+    .pipeline strong {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
   `,
-  imports: [DatePipe, RouterLink, AvatarComponent],
+  imports: [DatePipe, RouterLink, AvatarComponent, StatusIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardComponent {
@@ -241,6 +316,7 @@ export class DashboardComponent {
   private readonly enrollmentService = inject(EnrollmentService);
   private readonly user = inject(AuthService).currentUser;
   private readonly permissions = inject(PermissionsService);
+  private readonly tabButtons = viewChildren<ElementRef<HTMLButtonElement>>('tabButton');
 
   canApprove = this.permissions.can('ApproveTimeOff');
   canHire = this.permissions.can('ManageHiring');
@@ -263,6 +339,8 @@ export class DashboardComponent {
   busy = signal(false);
   kind = signal<QueueKind>('all');
   showAll = signal(false);
+  /** "Approved Harper Nguyen's vacation." after an approval from the queue. */
+  approved = signal('');
 
   data = toSignal(
     this.refresh$.pipe(
@@ -283,7 +361,7 @@ export class DashboardComponent {
     const hour = this.today.getHours();
     const partOfDay = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     const firstName = this.user()?.name.split(' ')[0];
-    return firstName ? `${partOfDay}, ${firstName}.` : `${partOfDay}.`;
+    return firstName ? `${partOfDay}, ${firstName}` : partOfDay;
   });
 
   private readonly employees = computed(() => this.data()?.employees ?? []);
@@ -293,6 +371,24 @@ export class DashboardComponent {
   private readonly courses = computed(() => this.data()?.courses ?? []);
 
   availableCount = computed(() => this.employees().filter((e) => e.isAvailable).length);
+
+  /** Who is away today and why, for the info alert above the queue. */
+  outToday = computed(() => {
+    const away = this.employees().filter((e) => !e.isAvailable);
+    if (!away.length) return null;
+    const reasons = awayLabels(this.requests(), this.today);
+    const people = away.map((e) => {
+      const name = `${e.firstName} ${e.lastName}`;
+      // "Sick Leave until 18 Oct" reads as "sick leave until 18 Oct" mid-sentence.
+      const [what, until] = (reasons[e.id] ?? '').split(' until ');
+      if (!what) return name;
+      return `${name} (${what.toLowerCase()}${until ? ` until ${until}` : ''})`;
+    });
+    return {
+      title: `${away.length} ${away.length === 1 ? 'person is' : 'people are'} out today`,
+      body: `${listJoin(people)}.`,
+    };
+  });
 
   /** Everything waiting on this user, time off and hiring together. */
   queue = computed(() =>
@@ -333,10 +429,10 @@ export class DashboardComponent {
 
   summary = computed(() => {
     const total = this.counts().all;
-    if (!total) return 'Nothing needs you today.';
+    if (!total) return 'Nothing needs your decision today.';
     const urgent = this.queue().filter((item) => item.urgent).length;
-    const things = `${total} ${total === 1 ? 'thing needs' : 'things need'} you.`;
-    return urgent ? `${things} ${urgent} ${urgent === 1 ? "can't" : "can't"} wait.` : things;
+    const things = `${total} ${total === 1 ? 'thing needs' : 'things need'} your decision.`;
+    return urgent ? `${things} ${urgent} can't wait.` : things;
   });
 
   weekRange = computed(() => nextWeekRange(this.today));
@@ -352,7 +448,7 @@ export class DashboardComponent {
       value: employees.filter((e) => e.position === position).length,
     }));
     const max = Math.max(1, ...counts.map((c) => c.value));
-    // Cobalt marks one takeaway only: the largest group, and it is labelled.
+    // Blue marks one takeaway only: the largest group, and it is labelled.
     return counts.map((c) => ({
       ...c,
       percent: (c.value / max) * 100,
@@ -368,11 +464,35 @@ export class DashboardComponent {
     }));
   });
 
-  approve(request: TimeOffRequest) {
+  selectKind(kind: QueueKind) {
+    this.kind.set(kind);
+    this.showAll.set(false);
+  }
+
+  /** Arrow keys, Home and End move between tabs, as the ACME Tabs do. */
+  onTabKey(event: KeyboardEvent, index: number) {
+    const tabs = this.tabs();
+    const last = tabs.length - 1;
+    const next =
+      event.key === 'ArrowRight' ? (index + 1) % tabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+      : event.key === 'Home' ? 0
+      : event.key === 'End' ? last
+      : null;
+    if (next === null) return;
+    event.preventDefault();
+    this.selectKind(tabs[next].kind);
+    this.tabButtons()[next]?.nativeElement.focus();
+  }
+
+  approve(item: QueueItem) {
+    const request = item.request;
+    if (!request) return;
     this.busy.set(true);
     this.timeOffRequestService.approveRequest(request.id).subscribe({
       next: () => {
         this.busy.set(false);
+        this.approved.set(`Approved ${item.name}'s ${request.type.toLowerCase()}.`);
         this.refresh$.next();
       },
       error: () => this.busy.set(false),
