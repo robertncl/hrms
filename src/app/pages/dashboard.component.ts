@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChildren } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { HttpErrorResponse } from '@angular/common/http';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { BehaviorSubject, forkJoin, of, switchMap } from 'rxjs';
 import { EmployeeService } from '../services/employee.service';
@@ -66,6 +67,10 @@ function listJoin(parts: string[]): string {
               <p>{{ out.body }}</p>
             </div>
           </div>
+        }
+
+        @if (refused()) {
+          <p class="alert alert-error" role="alert">{{ refused() }}</p>
         }
 
         @if (approved()) {
@@ -321,6 +326,7 @@ export class DashboardComponent {
   canApprove = this.permissions.can('ApproveTimeOff');
   canHire = this.permissions.can('ManageHiring');
   private readonly canAssign = this.permissions.can('AssignTraining');
+  private readonly orgWide = this.permissions.can('OrgWideAccess');
   canAddPeople = this.permissions.can('CreateEmployee');
   /** Approvers book for anyone; everyone else only for themselves. */
   canRequestTimeOff = computed(() => this.canApprove() || this.user()?.employeeId !== undefined);
@@ -330,6 +336,7 @@ export class DashboardComponent {
     canHire: this.canHire(),
     canAssign: this.canAssign(),
     employeeId: this.user()?.employeeId,
+    orgWide: this.orgWide(),
   }));
 
   readonly today = new Date();
@@ -341,6 +348,8 @@ export class DashboardComponent {
   showAll = signal(false);
   /** "Approved Harper Nguyen's vacation." after an approval from the queue. */
   approved = signal('');
+  /** Why an approval was turned down by the API (over balance, for instance). */
+  refused = signal('');
 
   data = toSignal(
     this.refresh$.pipe(
@@ -489,13 +498,18 @@ export class DashboardComponent {
     const request = item.request;
     if (!request) return;
     this.busy.set(true);
+    this.refused.set('');
     this.timeOffRequestService.approveRequest(request.id).subscribe({
       next: () => {
         this.busy.set(false);
         this.approved.set(`Approved ${item.name}'s ${request.type.toLowerCase()}.`);
         this.refresh$.next();
       },
-      error: () => this.busy.set(false),
+      error: (error: HttpErrorResponse) => {
+        this.busy.set(false);
+        this.approved.set('');
+        this.refused.set(error.error?.message ?? `${item.name}'s request couldn't be approved. Try again.`);
+      },
     });
   }
 }

@@ -14,9 +14,11 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { BehaviorSubject, forkJoin, switchMap } from 'rxjs';
-import { Employee } from 'src/app/infrastructure/types/employee';
+import { DEPARTMENTS, Employee } from 'src/app/infrastructure/types/employee';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AccessScope } from 'src/app/services/access-scope.service';
+import { inScope } from 'src/app/shared/functions/org';
 import { ProjectService } from 'src/app/services/project.service';
 import { TimeOffRequestService } from 'src/app/services/time-off-request.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
@@ -58,11 +60,19 @@ const PAGE_SIZE = 12;
       <div class="toolbar" role="search">
         <div class="search">
           <app-icon name="search" [size]="16" />
-          <label class="visually-hidden" for="employee-search">Search people by name or email</label>
-          <input id="employee-search" type="search" placeholder="Search by name or email"
+          <label class="visually-hidden" for="employee-search">Search people by name, email, job title or department</label>
+          <input id="employee-search" type="search" placeholder="Search by name, email or job title"
             [value]="search()" (input)="onSearch($any($event.target).value)" />
         </div>
 
+        <label class="visually-hidden" for="employee-department">Department</label>
+        <!-- [selected] per option, not [value] on the select: the value would be set before the options exist. -->
+        <select id="employee-department" class="input" (change)="setDepartment($any($event.target).value)">
+          <option value="" [selected]="!departmentFilter()">All departments</option>
+          @for (department of departments; track department) {
+            <option [value]="department" [selected]="department === departmentFilter()">{{ department }}</option>
+          }
+        </select>
 
         <label class="acme-switch push">
           <span>Away only</span>
@@ -77,6 +87,7 @@ const PAGE_SIZE = 12;
             <tr>
               <th scope="col">Name</th>
               <th scope="col">Role</th>
+              <th scope="col">Department</th>
               <th scope="col">Level</th>
               <th scope="col">Status</th>
               <th scope="col">Projects</th>
@@ -98,7 +109,8 @@ const PAGE_SIZE = 12;
                     </div>
                   </div>
                 </td>
-                <td data-label="Role">{{ employee.position }}</td>
+                <td data-label="Role">{{ employee.jobTitle || employee.position }}</td>
+                <td class="muted" data-label="Department">{{ employee.department || '—' }}</td>
                 <td class="muted" data-label="Level">{{ employee.level }}</td>
                 <td data-label="Status">
                   @let tone = statusTone(employee);
@@ -111,7 +123,7 @@ const PAGE_SIZE = 12;
                 </td>
                 <td class="muted projects" data-label="Projects">{{ projectNames()[employee.id] || '—' }}</td>
                 <td class="actions">
-                  @if (canEdit()) {
+                  @if (canEditPerson(employee)) {
                     <a class="btn btn-icon" [routerLink]="['/employees/edit', employee.id]"
                       [title]="'Edit ' + employee.firstName">
                       <app-icon name="edit" [size]="16" />
@@ -129,7 +141,7 @@ const PAGE_SIZE = 12;
               </tr>
             } @empty {
               <tr>
-                <td colspan="6" class="empty-state">
+                <td colspan="7" class="empty-state">
                   {{ loaded() ? 'Nobody matches those filters.' : 'Loading people…' }}
                 </td>
               </tr>
@@ -178,7 +190,11 @@ export class EmployeeListComponent {
   private readonly permissions = inject(PermissionsService);
 
   canAdd = this.permissions.can('CreateEmployee');
-  canEdit = this.permissions.can('EditEmployeeGeneralDetails');
+  private readonly canEdit = this.permissions.can('EditEmployeeGeneralDetails');
+  private readonly access = inject(AccessScope);
+  /** Whom this viewer may edit: everyone for HR, their reporting line for a lead. */
+  private readonly scope = computed(() => this.access.of(this.employees()));
+  readonly departments = DEPARTMENTS;
   canRemove = this.permissions.can('DeleteEmployee');
 
   readonly positions: Employee['position'][] = ['Developer', 'Designer', 'QA', 'Manager'];
@@ -188,9 +204,12 @@ export class EmployeeListComponent {
   /** Bound from `?position=` (links from Home) and `?q=` (app bar search). */
   position = input<string>('');
   query = input<string>('', { alias: 'q' });
+  /** Bound from `?department=`. */
+  department = input<string>('');
 
   positionFilter = linkedSignal(() => this.position() ?? '');
   search = linkedSignal(() => this.query() ?? '');
+  departmentFilter = linkedSignal(() => this.department() ?? '');
   awayOnly = signal(false);
   page = signal(0);
 
@@ -232,11 +251,14 @@ export class EmployeeListComponent {
     const term = this.search().trim().toLowerCase();
     const position = this.positionFilter();
     const awayOnly = this.awayOnly();
+    const department = this.departmentFilter();
     return this.employees().filter(
       (e) =>
         (!position || e.position === position) &&
+        (!department || e.department === department) &&
         (!awayOnly || !e.isAvailable) &&
-        (!term || `${e.firstName} ${e.lastName} ${e.email}`.toLowerCase().includes(term)),
+        (!term ||
+          `${e.firstName} ${e.lastName} ${e.email} ${e.jobTitle ?? ''} ${e.department ?? ''}`.toLowerCase().includes(term)),
     );
   });
 
@@ -293,6 +315,15 @@ export class EmployeeListComponent {
   setPosition(position: string) {
     this.positionFilter.set(position);
     this.page.set(0);
+  }
+
+  setDepartment(department: string) {
+    this.departmentFilter.set(department);
+    this.page.set(0);
+  }
+
+  canEditPerson(employee: Employee): boolean {
+    return this.canEdit() && inScope(this.scope(), employee.id);
   }
 
   setAwayOnly(value: boolean) {

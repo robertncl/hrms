@@ -7,11 +7,12 @@ import {
   DAY_MS,
   clashInfo,
   absenceType,
-  dayCount,
   formatRange,
   midnight,
   parseDay,
 } from 'src/app/shared/functions/absence';
+import { workingDays } from 'src/app/shared/functions/leave';
+import { inScope, scopeOf } from 'src/app/shared/functions/org';
 
 export type QueueKind = 'all' | 'timeoff' | 'hiring' | 'training';
 
@@ -22,6 +23,12 @@ export type QueueViewer = {
   canAssign: boolean;
   /** Their own People record; without assign rights they see only their own training. */
   employeeId?: number;
+  /**
+   * False for people limited to their own reporting line (a team lead): they
+   * see time off and training only for those who report to them. Defaults to
+   * true.
+   */
+  orgWide?: boolean;
 };
 
 export const EVERYTHING: QueueViewer = { canApprove: true, canHire: true, canAssign: true };
@@ -61,7 +68,8 @@ function timeOffItems(
     .slice()
     .sort((a, b) => a.startDate.localeCompare(b.startDate))
     .map((request) => {
-      const days = dayCount(request);
+      const location = employees.find((e) => e.id === request.employeeId)?.location;
+      const days = workingDays(request.startDate, request.endDate, location);
       const startsIn = Math.round((parseDay(request.startDate) - todayMs) / DAY_MS);
       const { text: clashText, clash } = clashInfo(request, requests, employees);
 
@@ -193,11 +201,18 @@ export function buildDecisionQueue(
   viewer: QueueViewer = EVERYTHING,
   today = new Date(),
 ): QueueItem[] {
-  const ownTraining = enrollments.filter((e) => e.employeeId === viewer.employeeId);
+  // Approvals and training chases stop at the edge of the viewer's reporting line.
+  const scope = scopeOf(employees, { orgWide: viewer.orgWide ?? true, employeeId: viewer.employeeId });
+  const own = (employeeId: number) => employeeId === viewer.employeeId;
+  const training = enrollments.filter(
+    (e) => own(e.employeeId) || (viewer.canAssign && inScope(scope, e.employeeId)),
+  );
   const items = [
-    ...(viewer.canApprove ? timeOffItems(requests, employees, today) : []),
+    ...(viewer.canApprove
+      ? timeOffItems(requests, employees, today).filter((item) => inScope(scope, item.request!.employeeId))
+      : []),
     ...(viewer.canHire ? hiringItems(candidates, employees, today) : []),
-    ...trainingItems(viewer.canAssign ? enrollments : ownTraining, courses, employees),
+    ...trainingItems(training, courses, employees),
   ];
   return items.sort((a, b) => Number(b.urgent) - Number(a.urgent));
 }

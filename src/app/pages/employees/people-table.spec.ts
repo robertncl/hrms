@@ -28,4 +28,15 @@ describe('people table CSV', () => {
     const [, row] = toCsv([employee], {}, () => 'In today').split('\r\n');
     expect(row.startsWith("'=cmd Doe,")).toBeTrue();
   });
+
+  it('should export the job title and department alongside the role', () => {
+    const employee: Employee = {
+      id: 1, firstName: 'Ada', lastName: 'Lovelace', email: 'ada@acme.com', position: 'Developer', level: 'Lead',
+      isAvailable: true, profilePicture: '', jobTitle: 'Head of Engineering', department: 'Engineering', location: 'London',
+    };
+    const [header, row] = toCsv([employee], { 1: 'Hadron' }, () => 'In today').split('\r\n');
+
+    expect(header).toBe('Name,Email,Job title,Department,Role,Level,Location,Status,Projects');
+    expect(row).toBe('Ada Lovelace,ada@acme.com,Head of Engineering,Engineering,Developer,Lead,London,In today,Hadron');
+  });
 });

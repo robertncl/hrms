@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
-import { Subject, merge } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Observable, Subject, merge, of } from 'rxjs';
+import { catchError, concatMap, map, switchMap } from 'rxjs/operators';
 import { TimeOffRequestService } from './time-off-request.service';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
@@ -13,6 +14,9 @@ export class TimeOffManagementService {
   approveRequest$ = new Subject<TimeOffRequest>();
   rejectRequest$ = new Subject<TimeOffRequest>();
   createRequest$ = new Subject<Omit<TimeOffRequest, 'id' | 'status'>>();
+  private readonly refresh$ = new Subject<void>();
+  /** Why the last change was refused (over balance, outside your team…), or '' when it went through. */
+  readonly error = signal('');
   selectedType = signal<
     | 'Vacation'
     | 'Sick Leave'
@@ -24,17 +28,20 @@ export class TimeOffManagementService {
   requests = toSignal(
     merge(
       toObservable(this.selectedType),
+      this.refresh$,
+      // concatMap, not switchMap: approving several requests in a row must
+      // send every one, not cancel all but the last.
       this.deleteRequest$.pipe(
-        switchMap((r) => this.timeOffRequestService.deleteRequest(r.id))
+        concatMap((r) => this.attempt(this.timeOffRequestService.deleteRequest(r.id)))
       ),
       this.approveRequest$.pipe(
-        switchMap((r) => this.timeOffRequestService.approveRequest(r.id))
+        concatMap((r) => this.attempt(this.timeOffRequestService.approveRequest(r.id)))
       ),
       this.rejectRequest$.pipe(
-        switchMap((r) => this.timeOffRequestService.rejectRequest(r.id))
+        concatMap((r) => this.attempt(this.timeOffRequestService.rejectRequest(r.id)))
       ),
       this.createRequest$.pipe(
-        switchMap((r) => this.timeOffRequestService.createRequest(r))
+        concatMap((r) => this.attempt(this.timeOffRequestService.createRequest(r)))
       )
     ).pipe(
       switchMap(() => {
@@ -66,6 +73,25 @@ export class TimeOffManagementService {
     effect(() => {
       localStorage.setItem('selectedType', this.selectedType());
     });
+  }
+
+  /** Re-reads the list, for when another page may have changed it. */
+  refresh() {
+    this.refresh$.next();
+  }
+
+  /**
+   * Runs one change. A refusal is reported through `error` and swallowed, so
+   * the stream (and with it the whole list) survives to take the next action.
+   */
+  private attempt(action: Observable<unknown>): Observable<unknown> {
+    this.error.set('');
+    return action.pipe(
+      catchError((error: HttpErrorResponse) => {
+        this.error.set(error.error?.message ?? "That change didn't go through. Try again.");
+        return of(null);
+      })
+    );
   }
 
   approveRequest(request: TimeOffRequest) {

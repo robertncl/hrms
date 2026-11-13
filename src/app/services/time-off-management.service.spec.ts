@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TimeOffManagementService } from './time-off-management.service';
 import { TimeOffRequestService } from './time-off-request.service';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
@@ -141,5 +142,61 @@ describe('TimeOffManagementService', () => {
 
     expect(sortedService.requests().map((r) => r.id)).toEqual([8, 6, 7, 5]);
     expect(sortedService.pendingRequests().map((r) => r.id)).toEqual([8, 6]);
+  });
+
+  it('should re-read the list on refresh', () => {
+    TestBed.tick();
+    mockTimeOffRequestService.getRequestsByType.calls.reset();
+
+    service.refresh();
+
+    expect(mockTimeOffRequestService.getRequestsByType).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when the API refuses a change', () => {
+    const refusal = () => throwError(() => new HttpErrorResponse({
+      status: 422, error: { message: 'This needs 2 days of vacation in 2026, and only 1 of 25 are left.' },
+    }));
+
+    it('should say why, and keep the list alive for the next action', () => {
+      TestBed.tick();
+      mockTimeOffRequestService.approveRequest.and.callFake(refusal);
+
+      service.approveRequest(mockRequests[0]);
+      expect(service.error()).toBe('This needs 2 days of vacation in 2026, and only 1 of 25 are left.');
+      expect(service.requests()).toEqual(mockRequests);
+
+      // The next action still goes out, and clears the message when it works.
+      service.rejectRequest(mockRequests[0]);
+      expect(mockTimeOffRequestService.rejectRequest).toHaveBeenCalledWith(1);
+      expect(service.error()).toBe('');
+    });
+
+    it('should fall back to a general message when the API gives no reason', () => {
+      TestBed.tick();
+      mockTimeOffRequestService.deleteRequest.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+
+      service.deleteRequest(mockRequests[0]);
+      expect(service.error()).toBe("That change didn't go through. Try again.");
+    });
+  });
+
+  it('should send every approval when several are made in a row', () => {
+    TestBed.tick();
+    // Each approval stays in flight until its subject completes.
+    const inFlight: Subject<object>[] = [];
+    mockTimeOffRequestService.approveRequest.and.callFake(() => {
+      const response = new Subject<object>();
+      inFlight.push(response);
+      return response;
+    });
+
+    service.approveRequest(mockRequests[0]);
+    service.approveRequest(mockRequests[1]);
+    expect(inFlight.length).toBe(1);
+
+    inFlight[0].next({});
+    inFlight[0].complete();
+    expect(mockTimeOffRequestService.approveRequest.calls.allArgs()).toEqual([[1], [2]]);
   });
 });

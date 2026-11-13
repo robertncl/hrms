@@ -7,9 +7,9 @@ describe('LearningOverviewComponent', () => {
   let component: LearningOverviewComponent;
   let mocks: LearningMocks;
 
-  const render = async (canManage = true, canAssign = true, employeeId?: number) => {
+  const render = async (canManage = true, canAssign = true, employeeId?: number, orgWide = canAssign) => {
     mocks = createLearningMocks();
-    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage, canAssign, employeeId) });
+    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage, canAssign, employeeId, orgWide) });
     fixture = TestBed.createComponent(LearningOverviewComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -97,6 +97,22 @@ describe('LearningOverviewComponent', () => {
       await render(false, false, 1);
       expect(el().querySelectorAll('.list li').length).toBe(0);
       expect(el().textContent).toContain('Nothing overdue. You are on track.');
+    });
+  });
+
+  describe('for a lead', () => {
+    it("should list their own team's overdue training", async () => {
+      // Ada leads Grace, whose security training is overdue.
+      await render(false, true, 1, false);
+      expect(el().textContent).toContain("Your team's overdue training");
+      const items = el().querySelectorAll('.list li');
+      expect(items.length).toBe(1);
+      expect(items[0].textContent).toContain('Grace Hopper');
+    });
+
+    it("should leave another team's overdue training out", async () => {
+      await render(false, true, 3, false);
+      expect(el().querySelectorAll('.list li').length).toBe(0);
     });
   });
 });

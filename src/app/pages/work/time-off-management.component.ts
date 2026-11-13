@@ -7,7 +7,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { rxResource, toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
   FormControl,
@@ -19,12 +19,16 @@ import {
 import { RouterLink } from '@angular/router';
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
 import { EmployeeService } from 'src/app/services/employee.service';
-import { AuthService } from 'src/app/services/auth.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AccessScope } from 'src/app/services/access-scope.service';
+import { LeaveBalanceService } from 'src/app/services/leave-balance.service';
+import { LeaveBalance, leaveBalances, leaveProblem, workingDays } from 'src/app/shared/functions/leave';
+import { inScope } from 'src/app/shared/functions/org';
+import { of } from 'rxjs';
 import { TimeOffManagementService } from 'src/app/services/time-off-management.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { enableLightDismissFallback } from 'src/app/shared/functions/light-dismiss';
-import { clashInfo, dayCount, formatRange } from 'src/app/shared/functions/absence';
+import { absenceType, clashInfo, formatRange } from 'src/app/shared/functions/absence';
 import { daysFromToday } from 'src/app/demo/demo-data';
 import { timelineBars, timelineWeeks, todayFraction } from './absence-timeline';
 
@@ -58,6 +62,30 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
           </div>
         }
       </div>
+
+      @if (error()) {
+        <p class="alert alert-error" role="alert">{{ error() }}</p>
+      }
+
+      @if (ownBalances().length) {
+        <section class="card balance-card" aria-labelledby="balance-title">
+          <h2 id="balance-title">Your leave this year</h2>
+          <dl class="balance-strip">
+            @for (balance of ownBalances(); track balance.type) {
+              <div>
+                <dt>{{ leaveLabel(balance.type) }}</dt>
+                <dd>
+                  <strong>{{ balance.remaining }}</strong>&ngsp;
+                  <span>of {{ balance.entitlement }} {{ balance.entitlement === 1 ? 'day' : 'days' }} left</span>
+                  @if (balance.pending) {
+                    &ngsp;<span class="muted">{{ balance.pending }} waiting for approval</span>
+                  }
+                </dd>
+              </div>
+            }
+          </dl>
+        </section>
+      }
 
       <section class="card" aria-labelledby="timeline-title">
         <div class="card-header">
@@ -117,7 +145,7 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
                   }
                 </div>
                 <div class="row-actions">
-                  @if (canApprove()) {
+                  @if (row.decidable) {
                     @if (row.request.status === 'Pending') {
                       <button class="btn btn-sm btn-ghost" type="button" (click)="reject(row.request)">Decline</button>
                       <button class="btn btn-sm" type="button" (click)="approve(row.request)">Approve</button>
@@ -146,10 +174,12 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
             <label for="request-employee">Person</label>
             @if (!canApprove()) {
               <span class="hint">You can book time off for yourself. Your lead approves it.</span>
+            } @else if (!orgWide()) {
+              <span class="hint">You can book time off for yourself and for the people who report to you.</span>
             }
             <select id="request-employee" formControlName="employeeId" [attr.aria-invalid]="showError('employeeId')">
               <option [ngValue]="null" disabled>Choose a person</option>
-              @for (employee of employees(); track employee.id) {
+              @for (employee of bookable(); track employee.id) {
                 <option [ngValue]="employee.id">{{ employee.firstName }} {{ employee.lastName }}</option>
               }
             </select>
@@ -182,6 +212,20 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
               <span id="request-end-error" class="error-msg">The last day can't be before the first day.</span>
             }
           </div>
+          @if (preview(); as preview) {
+            <p class="span-all leave-preview" [class.is-problem]="preview.problem" role="status">
+              @if (preview.problem) {
+                {{ preview.problem }}
+              } @else {
+                Uses <strong>{{ preview.days }}</strong> working {{ preview.days === 1 ? 'day' : 'days' }}.
+                @if (preview.balance; as balance) {
+                  {{ balance.remaining - preview.days }} of {{ balance.entitlement }} left afterwards.
+                } @else {
+                  This type of leave has no yearly limit.
+                }
+              }
+            </p>
+          }
           <div class="field span-all">
             <label for="request-comment">Comment <span class="acme-label__optional">(optional)</span></label>
             <textarea id="request-comment" formControlName="comment" rows="3"></textarea>
@@ -189,12 +233,25 @@ function endAfterStart(group: AbstractControl): ValidationErrors | null {
         </div>
         <div class="dialog-actions">
           <button class="btn" type="button" (click)="newRequestDialog.close()">Cancel</button>
-          <button class="btn btn-primary" type="submit">Send request</button>
+          <button class="btn btn-primary" type="submit" [disabled]="!!preview()?.problem">Send request</button>
         </div>
       </form>
     </dialog>
     `,
   styles: `
+    .balance-card h2 { margin-bottom: var(--acme-space-3); }
+    .balance-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+      gap: var(--acme-space-4);
+      margin: 0;
+    }
+    .balance-strip dt { color: var(--acme-color-text-muted); font-size: var(--acme-text-sm); }
+    .balance-strip dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--acme-space-2); margin: 0; font-size: var(--acme-text-sm); }
+    .balance-strip strong { font: 700 var(--acme-text-2xl) / 1.1 var(--acme-font-display); }
+    .leave-preview { margin: 0; font-size: var(--acme-text-sm); color: var(--acme-color-text-muted); }
+    .leave-preview.is-problem { color: var(--acme-color-danger); }
+
     /* A name column plus one column per day across six weeks. */
     .timeline.six { grid-template-columns: 150px repeat(42, minmax(0, 1fr)); }
     .timeline.six .t-today { left: calc(150px + (100% - 150px) * var(--t-today)); }
@@ -243,10 +300,13 @@ export class TimeOffManagementComponent {
 
   status = signal<Tab>('Pending');
 
-  private readonly user = inject(AuthService).currentUser;
+  private readonly access = inject(AccessScope);
+  private readonly leaveBalanceService = inject(LeaveBalanceService);
   canApprove = inject(PermissionsService).can('ApproveTimeOff');
+  readonly orgWide = this.access.orgWide;
+  readonly error = this.timeOffsService.error;
   /** The signed-in person's own People record, if they have one. */
-  private readonly ownId = computed(() => this.user()?.employeeId);
+  private readonly ownId = this.access.ownId;
   /** Approvers book for anyone; everyone else only for themselves. */
   canRequest = computed(() => this.canApprove() || this.ownId() !== undefined);
 
@@ -261,15 +321,24 @@ export class TimeOffManagementComponent {
 
   bars = computed(() => timelineBars(this.allRequests(), this.employees()));
 
-  /** Approvers work the whole queue; everyone else sees only their own requests. */
+  private readonly byId = computed(() => new Map(this.employees().map((e) => [e.id, e])));
+  /** Whose requests this viewer decides: everyone for HR, their reporting line for a lead. */
+  private readonly scope = computed(() => this.access.of(this.employees()));
+  private decides(employeeId: number): boolean {
+    return this.canApprove() && inScope(this.scope(), employeeId);
+  }
+
+  /** The requests this viewer decides, plus their own. Everyone else's stay on the calendar only. */
   private readonly rows = computed(() =>
     this.allRequests()
-      .filter((request) => this.canApprove() || request.employeeId === this.ownId())
+      .filter((request) => this.decides(request.employeeId) || request.employeeId === this.ownId())
       .map((request) => {
         const { text, clash } = clashInfo(request, this.allRequests(), this.employees());
-        const days = dayCount(request);
+        // Leave is counted in working days: weekends and public holidays are free.
+        const days = workingDays(request.startDate, request.endDate, this.byId().get(request.employeeId)?.location);
         return {
           request,
+          decidable: this.decides(request.employeeId),
           name: this.names().get(request.employeeId) ?? `Employee #${request.employeeId}`,
           dates: formatRange(request.startDate, request.endDate),
           days: `${days} ${days === 1 ? 'day' : 'days'}`,
@@ -296,12 +365,14 @@ export class TimeOffManagementComponent {
 
   /** Pending requests nobody else's absence collides with. */
   private readonly clearRequests = computed(() =>
-    this.rows().filter((row) => row.request.status === 'Pending' && !row.clash),
+    this.rows().filter((row) => row.decidable && row.request.status === 'Pending' && !row.clash),
   );
   clearCount = computed(() => this.clearRequests().length);
 
   summary = computed(() => {
-    const waiting = this.rows().filter((row) => row.request.status === 'Pending').length;
+    const pending = this.rows().filter((row) => row.request.status === 'Pending');
+    // Approvers are told what waits on them; their own request waits on someone else.
+    const waiting = pending.filter((row) => row.decidable || !this.canApprove()).length;
     if (!this.canApprove()) {
       if (this.ownId() === undefined) return 'Who is out over the next six weeks.';
       return waiting
@@ -336,8 +407,48 @@ export class TimeOffManagementComponent {
     { validators: endAfterStart },
   );
 
+  /** The signed-in person's balances, re-read whenever the requests change. */
+  private readonly balanceResource = rxResource({
+    params: () => ({ ownId: this.ownId(), requests: this.allRequests() }),
+    stream: ({ params }) =>
+      params.ownId === undefined ? of([] as LeaveBalance[]) : this.leaveBalanceService.getBalances(params.ownId),
+  });
+  ownBalances = computed(() => (this.balanceResource.hasValue() ? this.balanceResource.value() : []));
+  leaveLabel = (type: LeaveBalance['type']) => (type === 'Other' ? 'Personal' : absenceType(type));
+
+  /** Who a request can be booked for: yourself, and whoever you approve for. */
+  bookable = computed(() =>
+    this.employees().filter((e) => e.id === this.ownId() || this.decides(e.id)),
+  );
+
+  /** Bumped on every change to the request form, which is not itself a signal. */
+  private readonly formChanges = toSignal(this.newRequestForm.valueChanges);
+
+  /**
+   * What the request in the dialog would cost, checked with the same rules
+   * the API applies, so a request that can't be booked is caught before it
+   * is sent.
+   */
+  preview = computed(() => {
+    this.formChanges();
+    const { employeeId, type, startDate, endDate } = this.newRequestForm.getRawValue();
+    const person = employeeId === null ? undefined : this.byId().get(employeeId);
+    if (!person || !startDate || !endDate) return null;
+    const problem = leaveProblem(person, this.allRequests(), { type, startDate, endDate });
+    const year = new Date(`${startDate}T00:00:00`).getFullYear();
+    return {
+      problem,
+      days: workingDays(startDate, endDate, person.location),
+      balance: leaveBalances(person, this.allRequests(), year).find((b) => b.type === type),
+    };
+  });
+
   constructor() {
     afterNextRender(() => enableLightDismissFallback(this.newRequestDialog().nativeElement));
+    // The page has no type filter any more, and other pages approve requests
+    // too: always start from the full, current list.
+    this.timeOffsService.selectedType.set('');
+    this.timeOffsService.refresh();
   }
 
   showError(name: 'employeeId' | 'startDate' | 'endDate') {
@@ -369,7 +480,7 @@ export class TimeOffManagementComponent {
   }
 
   submitNewRequest() {
-    if (this.newRequestForm.invalid) {
+    if (this.newRequestForm.invalid || this.preview()?.problem) {
       this.newRequestForm.markAllAsTouched();
       return;
     }
