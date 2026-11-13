@@ -12,6 +12,9 @@ import { Employee } from 'src/app/infrastructure/types/employee';
 import { imageLoader } from 'src/app/app.config';
 import { grantRole } from 'src/testing/roles';
 import { DemoRole } from 'src/app/demo/demo-data';
+import { signal } from '@angular/core';
+import { AuthService } from 'src/app/services/auth.service';
+import { User } from 'src/app/infrastructure/types/user';
 
 describe('EmployeeListComponent', () => {
   let component: EmployeeListComponent;
@@ -27,6 +30,9 @@ describe('EmployeeListComponent', () => {
       level: 'Senior',
       isAvailable: true,
       profilePicture: 'john.png',
+      department: 'Engineering',
+      jobTitle: 'Staff Engineer',
+      managerId: 7,
     },
     {
       id: 2,
@@ -37,9 +43,11 @@ describe('EmployeeListComponent', () => {
       level: 'Junior',
       isAvailable: false,
       profilePicture: 'jane.png',
+      department: 'Design',
     },
   ];
 
+  const currentUser = signal<User | null>(null);
   const mockEmployeeService = {
     getEmployees: jasmine.createSpy('getEmployees').and.returnValue(of(mockEmployees)),
     getEmployee: jasmine.createSpy('getEmployee').and.callFake((id: number) =>
@@ -72,14 +80,16 @@ describe('EmployeeListComponent', () => {
           },
         },
         { provide: IMAGE_LOADER, useValue: imageLoader },
+        { provide: AuthService, useValue: { currentUser } },
       ],
     }).compileComponents();
 
     render('HR Administrator');
   });
 
-  const render = (role: DemoRole) => {
+  const render = (role: DemoRole, employeeId?: number) => {
     grantRole(role);
+    currentUser.set({ name: 'Test', email: '', role, ...(employeeId ? { employeeId } : {}) });
     fixture = TestBed.createComponent(EmployeeListComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -130,6 +140,44 @@ describe('EmployeeListComponent', () => {
     component.positionFilter.set('Developer');
     fixture.detectChanges();
     expect(rowNames()).toEqual(['John Doe']);
+  });
+
+  it('should filter employees by department', () => {
+    const select = el().querySelector('#employee-department') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent!.trim()))
+      .toEqual(['All departments', 'Engineering', 'Design', 'Quality', 'Delivery']);
+
+    select.value = 'Design';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['Jane Smith']);
+  });
+
+  it('should take the initial department filter from the route', () => {
+    fixture.componentRef.setInput('department', 'Engineering');
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['John Doe']);
+    // The picker has to show the filter that is in force.
+    expect((el().querySelector('#employee-department') as HTMLSelectElement).value).toBe('Engineering');
+  });
+
+  it('should find people by job title or department', () => {
+    component.search.set('staff eng');
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['John Doe']);
+
+    component.search.set('design');
+    fixture.detectChanges();
+    expect(rowNames()).toEqual(['Jane Smith']);
+  });
+
+  it('should show the job title and department, falling back to the role', () => {
+    const cell = (row: number, label: string) =>
+      (el().querySelectorAll('tbody tr')[row].querySelector(`td[data-label="${label}"]`) as HTMLElement).textContent!.trim();
+
+    expect(cell(0, 'Role')).toBe('Staff Engineer');
+    expect(cell(0, 'Department')).toBe('Engineering');
+    expect(cell(1, 'Role')).toBe('Designer');
   });
 
   it('should take the initial position filter from the route', () => {
@@ -210,10 +258,17 @@ describe('EmployeeListComponent', () => {
       expect(rowControls()).toEqual(['Edit', 'Remove']);
     });
 
-    it('should let a team lead edit but not add or remove people', () => {
-      render('Team Lead');
+    it('should let a team lead edit their own reports, but not add or remove people', () => {
+      render('Team Lead', 7);
       expect(el().querySelector('a[href="/employees/create"]')).toBeNull();
+      // John reports to lead 7; Jane doesn't.
       expect(rowControls()).toEqual(['Edit']);
+      expect(el().querySelectorAll('tbody tr:nth-child(2) td.actions a').length).toBe(0);
+    });
+
+    it("should not offer a lead Edit for people on another team", () => {
+      render('Team Lead', 3);
+      expect(rowControls()).toEqual([]);
     });
 
     it('should let a recruiter add people but not edit or remove them', () => {

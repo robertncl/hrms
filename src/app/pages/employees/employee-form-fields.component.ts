@@ -1,6 +1,6 @@
 import { Component, computed, input } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Employee, LOCATIONS } from 'src/app/infrastructure/types/employee';
+import { DEPARTMENTS, Employee, LOCATIONS } from 'src/app/infrastructure/types/employee';
 import { EmployeeForm } from 'src/app/infrastructure/types/employee-form';
 
 export const POSITIONS = ['Developer', 'Designer', 'QA', 'Manager'] as const;
@@ -14,6 +14,8 @@ export function createEmployeeForm(): FormGroup<EmployeeForm> {
     email: new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.email] }),
     position: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     level: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
+    department: new FormControl('', { nonNullable: true }),
+    jobTitle: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(80)] }),
     startDate: new FormControl('', { nonNullable: true }),
     location: new FormControl('', { nonNullable: true }),
     managerId: new FormControl<number | null>(null),
@@ -90,6 +92,21 @@ export const PRIVATE_CONTROLS = ['firstName', 'lastName', 'email', 'phone', 'per
           @if (showError('position')) {
             <span class="error-msg">Choose a position.</span>
           }
+        </div>
+        <div class="pair">
+          <div class="field">
+            <label for="employee-job-title">Job title <span class="acme-label__optional">(optional)</span></label>
+            <input id="employee-job-title" type="text" autocomplete="off" formControlName="jobTitle" />
+          </div>
+          <div class="field">
+            <label for="employee-department">Department <span class="acme-label__optional">(optional)</span></label>
+            <select id="employee-department" formControlName="department">
+              <option value="">Not set</option>
+              @for (department of departments; track department) {
+                <option [value]="department">{{ department }}</option>
+              }
+            </select>
+          </div>
         </div>
         <div class="pair">
           <div class="field">
@@ -217,6 +234,7 @@ export class EmployeeFormFieldsComponent {
   readonly positions = POSITIONS;
   readonly levels = LEVELS;
   readonly locations = LOCATIONS;
+  readonly departments = DEPARTMENTS;
 
   /** Managers first, then everyone else, alphabetically. */
   managerOptions = computed(() =>

@@ -1,10 +1,12 @@
-import { Component, inject, DestroyRef, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, DestroyRef, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AccessScope } from 'src/app/services/access-scope.service';
+import { HttpErrorResponse } from '@angular/common/http';
 import { EmployeeFormFieldsComponent, PRIVATE_CONTROLS, createEmployeeForm } from './employee-form-fields.component';
 
 @Component({
@@ -38,6 +40,11 @@ import { EmployeeFormFieldsComponent, PRIVATE_CONTROLS, createEmployeeForm } fro
 
         <app-employee-form-fields [form]="form" [people]="people()" [selfId]="employee.id" />
 
+        @if (outOfScope()) {
+          <p class="alert alert-error" role="alert">
+            {{ employee.firstName }} doesn't report to you, so you can't change their details.
+          </p>
+        }
         @if (error()) {
           <p class="alert alert-error" role="alert">{{ error() }}</p>
         }
@@ -45,7 +52,7 @@ import { EmployeeFormFieldsComponent, PRIVATE_CONTROLS, createEmployeeForm } fro
 
       <div class="form-bar">
         <a class="btn btn-ghost" [routerLink]="['/employees/details', employee.id]">Cancel</a>
-        <button class="btn btn-primary" type="submit" [disabled]="saving()">
+        <button class="btn btn-primary" type="submit" [disabled]="saving() || outOfScope()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
         </button>
       </div>
@@ -76,6 +83,9 @@ export class EditEmployeeComponent implements OnInit {
   form = createEmployeeForm();
   /** For the "Reports to" picker. */
   people = toSignal(this.employeeService.getEmployees(), { initialValue: [] });
+  private readonly access = inject(AccessScope);
+  /** True once the people list shows this person is outside the viewer's reporting line. */
+  outOfScope = computed(() => this.people().length > 0 && !this.access.covers(this.people(), this.employee.id));
 
   ngOnInit() {
     this.employee = this.route.snapshot.data['employee'] as Employee;
@@ -104,9 +114,12 @@ export class EditEmployeeComponent implements OnInit {
     // form.value leaves out disabled controls, so only editable fields are sent.
     this.employeeService.updateEmployee(this.employee.id, this.form.value as Partial<Employee>).subscribe({
       next: () => this.router.navigate(['/employees/details', this.employee.id]),
-      error: () => {
+      error: (error: HttpErrorResponse) => {
         this.saving.set(false);
-        this.error.set("Those changes didn't save. Try again.");
+        // A refusal (403) says why; anything else is worth a retry.
+        this.error.set(error.status === 403 && error.error?.message
+          ? error.error.message
+          : "Those changes didn't save. Try again.");
       },
     });
   }

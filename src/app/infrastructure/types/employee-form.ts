@@ -6,6 +6,8 @@ export type EmployeeForm = {
   email: FormControl<string>;
   position: FormControl<string>;
   level: FormControl<string>;
+  department: FormControl<string>;
+  jobTitle: FormControl<string>;
   startDate: FormControl<string>;
   location: FormControl<string>;
   managerId: FormControl<number | null>;

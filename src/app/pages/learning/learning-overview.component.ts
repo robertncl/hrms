@@ -8,6 +8,8 @@ import { CourseService } from 'src/app/services/course.service';
 import { EnrollmentService } from 'src/app/services/enrollment.service';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AccessScope } from 'src/app/services/access-scope.service';
+import { inScope } from 'src/app/shared/functions/org';
 import { AuthService } from 'src/app/services/auth.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { BarListComponent, BarListItem } from 'src/app/shared/components/bar-list.component';
@@ -58,7 +60,7 @@ import { COURSE_CATEGORIES, completionRate, formatDuration, isOverdue } from './
         <div class="panels">
           <section class="card">
             <div class="card-header">
-              <h2>{{ canAssign() ? 'Overdue training' : 'Your overdue training' }}</h2>
+              <h2>{{ !canAssign() ? 'Your overdue training' : orgWide() ? 'Overdue training' : "Your team's overdue training" }}</h2>
               <span class="muted small">{{ overdueList().length }} assignments</span>
             </div>
             @if (overdueList().length) {
@@ -221,6 +223,8 @@ export class LearningOverviewComponent {
   canManage = toSignal(inject(PermissionsService).hasPermission('ManageCourses'), { initialValue: false });
   canAssign = inject(PermissionsService).can('AssignTraining');
   private readonly ownId = computed(() => this.user()?.employeeId);
+  private readonly access = inject(AccessScope);
+  readonly orgWide = this.access.orgWide;
 
   /** Bound from the `?category=` query parameter. */
   category = input<string>('');
@@ -257,9 +261,13 @@ export class LearningOverviewComponent {
       .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
   );
   /** The list people act on: everyone's for those who assign training, your own otherwise. */
-  overdueList = computed(() =>
-    this.canAssign() ? this.overdue() : this.overdue().filter((e) => e.employeeId === this.ownId()),
-  );
+  overdueList = computed(() => {
+    // Assigners chase the people in their scope; everyone also sees their own.
+    const scope = this.access.of(this.data.hasValue() ? this.data.value().employees : []);
+    return this.overdue().filter(
+      (e) => e.employeeId === this.ownId() || (this.canAssign() && inScope(scope, e.employeeId)),
+    );
+  });
   mandatoryRate = computed(() => {
     const mandatory = new Set(this.courses().filter((c) => c.mandatory).map((c) => c.id));
     return completionRate(this.enrollments().filter((e) => mandatory.has(e.courseId)));

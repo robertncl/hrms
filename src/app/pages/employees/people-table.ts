@@ -54,13 +54,16 @@ export function toCsv(
   projectNames: Record<number, string>,
   statusLabel: (employee: Employee) => string,
 ): string {
-  const header = ['Name', 'Email', 'Role', 'Level', 'Status', 'Projects'];
+  const header = ['Name', 'Email', 'Job title', 'Department', 'Role', 'Level', 'Location', 'Status', 'Projects'];
   const rows = employees.map((employee) =>
     [
       `${employee.firstName} ${employee.lastName}`,
       employee.email,
+      employee.jobTitle ?? '',
+      employee.department ?? '',
       employee.position,
       employee.level,
+      employee.location ?? '',
       statusLabel(employee),
       projectNames[employee.id] ?? '',
     ].map(csvCell).join(','),

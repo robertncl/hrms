@@ -1,7 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { DashboardComponent } from './dashboard.component';
 import { EmployeeService } from '../services/employee.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
@@ -26,7 +27,8 @@ describe('DashboardComponent', () => {
   const employee = (id: number, position: Employee['position'], isAvailable = true): Employee => ({
     id, firstName: `First${id}`, lastName: `Last${id}`, email: '', position, level: 'Senior', isAvailable, profilePicture: '',
   });
-  const employees = [employee(1, 'Developer'), employee(2, 'Developer', false), employee(3, 'QA')];
+  // First1 reports to a lead (9) who isn't in this list; the others report to nobody.
+  const employees = [{ ...employee(1, 'Developer'), managerId: 9 }, employee(2, 'Developer', false), employee(3, 'QA')];
   // Built per test, after the clock is pinned (see beforeEach).
   let requests: TimeOffRequest[] = [];
   const buildRequests = (): TimeOffRequest[] => [
@@ -251,5 +253,32 @@ describe('DashboardComponent', () => {
       expect(tabLabels()).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1']);
       expect(actionLabels()).toEqual(['Request time off']);
     });
+
+    it("should keep another team's requests and training off a lead's queue", () => {
+      // Nobody in the list reports to lead 5.
+      render('Team Lead', 5);
+
+      expect(tabLabels()).toEqual(['All 0', 'Time off 0', 'Hiring 0', 'Training 0']);
+      expect(text()).toContain('Nothing waiting on you');
+    });
+
+    it('should show the learning coordinator overdue training for everyone', () => {
+      render('Learning Coordinator');
+
+      expect(tabLabels()).toEqual(['All 1', 'Training 1']);
+    });
+  });
+
+  it('should say why when the API refuses an approval', () => {
+    mockTimeOffRequestService.approveRequest.and.returnValue(throwError(() => new HttpErrorResponse({
+      status: 422, error: { message: 'This needs 2 days of vacation in 2026, and only 1 of 25 are left.' },
+    })));
+    const approve = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+      .find((b) => b.textContent!.trim() === 'Approve')!;
+    approve.click();
+    fixture.detectChanges();
+
+    expect(text()).toContain('only 1 of 25 are left');
+    expect(fixture.nativeElement.querySelector('.acme-alert--success')).toBeNull();
   });
 });

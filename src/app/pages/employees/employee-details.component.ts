@@ -14,9 +14,12 @@ import { CourseService } from 'src/app/services/course.service';
 import { EnrollmentService } from 'src/app/services/enrollment.service';
 import { Enrollment } from 'src/app/infrastructure/types/course';
 import { enrollmentLabel, enrollmentTone, isOverdue } from '../learning/learning';
-import { clashInfo, dayCount, formatDay, formatRange } from 'src/app/shared/functions/absence';
+import { absenceType, clashInfo, formatDay, formatRange } from 'src/app/shared/functions/absence';
 import { awayLabels } from './people-table';
 import { AuthService } from 'src/app/services/auth.service';
+import { AccessScope } from 'src/app/services/access-scope.service';
+import { LeaveBalanceService } from 'src/app/services/leave-balance.service';
+import { LeaveBalance, workingDays } from 'src/app/shared/functions/leave';
 import { PermissionsService } from 'src/app/services/permissions.service';
 import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
 
@@ -36,14 +39,18 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
         <div class="who">
           <h1>{{ fullName }}</h1>
           <div class="meta">
-            <span>{{ employee.level }} {{ employee.position.toLowerCase() }}</span>
+            <span>{{ employee.jobTitle || employee.level + ' ' + employee.position.toLowerCase() }}</span>
             <span aria-hidden="true">·</span>
+            @if (employee.department) {
+              <a routerLink="/employees" [queryParams]="{ department: employee.department }">{{ employee.department }}</a>
+              <span aria-hidden="true">·</span>
+            }
             <a [href]="'mailto:' + employee.email">{{ employee.email }}</a>
             <span aria-hidden="true">·</span>
             <span class="status" [class.is-away]="!employee.isAvailable">{{ statusLabel() }}</span>
           </div>
         </div>
-        @if (canEdit()) {
+        @if (canEditThis()) {
           <div class="page-actions">
             <a class="btn btn-primary" [routerLink]="['/employees/edit', employee.id]">Edit details</a>
           </div>
@@ -52,7 +59,7 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
 
       <div class="split even">
         <div class="stack">
-          @if (canApprove() && pending(); as request) {
+          @if (canApproveThis() && pending(); as request) {
             <section class="callout" aria-labelledby="pending-title">
               <div class="callout-body">
                 <strong id="pending-title">
@@ -138,6 +145,8 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
           <section class="card" aria-labelledby="details-title">
             <h2 id="details-title">Details</h2>
             <dl class="details-list">
+              <dt>Job title</dt><dd>{{ employee.jobTitle || '—' }}</dd>
+              <dt>Department</dt><dd>{{ employee.department || '—' }}</dd>
               <dt>Role</dt><dd>{{ employee.position }}</dd>
               <dt>Level</dt><dd>{{ employee.level }}</dd>
               <dt>Email</dt><dd>{{ employee.email }}</dd>
@@ -203,6 +212,21 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
               <h2 id="timeoff-title">Time off</h2>
               <a class="small" routerLink="/work/time-off">All requests</a>
             </div>
+            @if (balances().length) {
+              <dl class="balances" aria-label="Leave left this year">
+                @for (balance of balances(); track balance.type) {
+                  <div>
+                    <dt>{{ leaveLabel(balance.type) }}</dt>
+                    <dd>
+                      <strong>{{ balance.remaining }}</strong> of {{ balance.entitlement }} {{ balance.entitlement === 1 ? 'day' : 'days' }} left
+                      @if (balance.pending) {
+                        <span class="muted">· {{ balance.pending }} waiting</span>
+                      }
+                    </dd>
+                  </div>
+                }
+              </dl>
+            }
             @if (history().length) {
               <div class="rows time-rows">
                 @for (request of history(); track request.id) {
@@ -213,7 +237,7 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
                     </div>
                     <span class="badge" [class.badge-selected]="request.status === 'Pending'"
                       [class.badge-critical]="request.status === 'Rejected'">
-                      {{ request.status === 'Pending' ? (canApprove() ? 'Waiting on you' : 'Waiting for approval') : request.status }}
+                      {{ request.status === 'Pending' ? (canApproveThis() ? 'Waiting on you' : 'Waiting for approval') : request.status }}
                     </span>
                   </div>
                 }
@@ -291,6 +315,15 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
     .l-body a { font-weight: 600; text-decoration: none; }
     .learning-row .badge { justify-self: start; }
     .reports a { white-space: nowrap; }
+    .balances {
+      display: grid;
+      gap: var(--acme-space-1);
+      margin: 0 0 var(--acme-space-3);
+      font-size: var(--acme-text-sm);
+    }
+    .balances div { display: flex; justify-content: space-between; gap: var(--acme-space-3); }
+    .balances dt { color: var(--acme-color-text-muted); }
+    .balances dd { margin: 0; text-align: right; }
     .private-note { margin: calc(-1 * var(--acme-space-2)) 0 var(--acme-space-4); }
 
     @media (max-width: 560px) {
@@ -336,8 +369,17 @@ export class EmployeeDetailsComponent implements OnInit {
   longDate = formatLongDate;
   tenure = (startDate: string) => tenure(startDate);
 
-  canEdit = this.permissions.can('EditEmployeeGeneralDetails');
-  canApprove = this.permissions.can('ApproveTimeOff');
+  private readonly canEdit = this.permissions.can('EditEmployeeGeneralDetails');
+  private readonly canApprove = this.permissions.can('ApproveTimeOff');
+  private readonly access = inject(AccessScope);
+  private readonly leaveBalanceService = inject(LeaveBalanceService);
+  /** Editing and approving reach only the people in the viewer's scope. */
+  private readonly inScope = computed(() => this.access.covers(this.colleagues(), this.employee.id));
+  canEditThis = computed(() => this.canEdit() && this.inScope());
+  canApproveThis = computed(() => this.canApprove() && this.inScope());
+  /** What this person has left to book; shown to them, their approver and HR. */
+  balances = signal<LeaveBalance[]>([]);
+  leaveLabel = (type: LeaveBalance['type']) => (type === 'Other' ? 'Personal' : absenceType(type));
   private readonly canSeeAllPrivate = this.permissions.can('EditEmployeePrivateDetails');
   /** Private details are for HR and for the person themselves. */
   isSelf = computed(() => this.user()?.employeeId === this.employee?.id);
@@ -416,6 +458,19 @@ export class EmployeeDetailsComponent implements OnInit {
       );
 
       this.loaded.set(true);
+      this.loadBalances();
+    });
+  }
+
+  private loadBalances() {
+    // The API refuses balances outside your own and your team's, so don't ask.
+    if (!this.isSelf() && !this.canApproveThis()) {
+      this.balances.set([]);
+      return;
+    }
+    this.leaveBalanceService.getBalances(this.employee.id).subscribe({
+      next: (balances) => this.balances.set(balances),
+      error: () => this.balances.set([]),
     });
   }
 
@@ -432,7 +487,8 @@ export class EmployeeDetailsComponent implements OnInit {
   }
 
   days(request: TimeOffRequest): string {
-    const count = dayCount(request);
+    // Leave is counted in working days: weekends and public holidays are free.
+    const count = workingDays(request.startDate, request.endDate, this.employee.location);
     return `${count} ${count === 1 ? 'day' : 'days'}`;
   }
 
