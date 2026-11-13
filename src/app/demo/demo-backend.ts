@@ -8,7 +8,7 @@ import {
 } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, mergeMap, of, throwError, timer } from 'rxjs';
-import { Employee, PRIVATE_EMPLOYEE_FIELDS } from '../infrastructure/types/employee';
+import { CONFIDENTIAL_EMPLOYEE_FIELDS, Employee, PRIVATE_EMPLOYEE_FIELDS } from '../infrastructure/types/employee';
 import { Enrollment } from '../infrastructure/types/course';
 import { Permissions } from '../infrastructure/types/permissions';
 import {
@@ -195,7 +195,9 @@ export class DemoBackend {
                 if (method === 'GET') return need('ViewEmployees');
                 if (method === 'POST') return need('CreateEmployee');
                 if (method === 'DELETE') return need('DeleteEmployee');
-                const changesPrivate = PRIVATE_EMPLOYEE_FIELDS.some(field => field in body && body[field] !== row?.[field]);
+                // A PUT replaces the whole record, so leaving a private field out clears it.
+                const changesPrivate = PRIVATE_EMPLOYEE_FIELDS.some(field =>
+                    (method === 'PUT' || field in body) && body[field] !== row?.[field]);
                 return need('EditEmployeeGeneralDetails') ?? (changesPrivate ? need('EditEmployeePrivateDetails') : null);
             }
             case 'time-off-requests':
@@ -239,7 +241,8 @@ export class DemoBackend {
         if (id === undefined) {
             switch (req.method) {
                 case 'GET':
-                    return ok(rows.filter(row => matches(row, query)).map(row => this.view(collection, row)));
+                    // Filter what the caller may see, so a filter can't probe hidden fields.
+                    return ok(rows.map(row => this.view(collection, row, account)).filter(row => matches(row as Row, query)));
                 case 'POST': {
                     const rejection = this.validateCreate(collection, body);
                     if (rejection) {
@@ -254,7 +257,7 @@ export class DemoBackend {
                     if (collection === 'employees') {
                         this.enrollInMandatoryCourses(created.id);
                     }
-                    return ok(this.view(collection, rows[rows.length - 1]), 201);
+                    return ok(this.view(collection, rows[rows.length - 1], account), 201);
                 }
                 default:
                     return fail(405, 'Method not allowed');
@@ -267,13 +270,13 @@ export class DemoBackend {
 
         switch (req.method) {
             case 'GET':
-                return ok(this.view(collection, rows[index]));
+                return ok(this.view(collection, rows[index], account));
             case 'PATCH':
                 rows[index] = this.normalize(collection, { ...rows[index], ...body, id: rows[index].id });
-                return ok(this.view(collection, rows[index]));
+                return ok(this.view(collection, rows[index], account));
             case 'PUT':
                 rows[index] = this.normalize(collection, { ...body, id: rows[index].id } as Row);
-                return ok(this.view(collection, rows[index]));
+                return ok(this.view(collection, rows[index], account));
             case 'DELETE':
                 rows.splice(index, 1);
                 if (collection === 'employees') {
@@ -288,10 +291,16 @@ export class DemoBackend {
         }
     }
 
-    /** Returns a copy of the row, with derived fields filled in. */
-    private view(collection: Collection, row: Row): unknown {
+    /** Returns a copy of the row as `account` may see it, with derived fields filled in. */
+    private view(collection: Collection, row: Row, account: DemoAccount): unknown {
         const copy = structuredClone(row);
         if (collection === 'employees') {
+            // Phone and personal email are for HR and the person themselves.
+            if (!permissionsFor(account.role).EditEmployeePrivateDetails && row.id !== account.employeeId) {
+                for (const field of CONFIDENTIAL_EMPLOYEE_FIELDS) {
+                    delete copy[field];
+                }
+            }
             // Availability follows approved time off, so approving a request
             // that covers today immediately marks the employee as away.
             const today = daysFromToday(0);

@@ -36,7 +36,7 @@ Each user type is a set of permissions (`ROLE_PERMISSIONS` in `src/app/demo/demo
 | Assign training and track anyone's progress (`AssignTraining`) | ✓ | ✓ | | ✓ | |
 | Create, edit and delete courses (`ManageCourses`) | ✓ | | | ✓ | |
 
-Without `ApproveTimeOff`, people book time off only for themselves and can withdraw a request while it's still pending. Without `AssignTraining`, they see and update only their own training. Private details (phone and personal email) are shown only to HR and to the person themselves.
+Without `ApproveTimeOff`, people book time off only for themselves and can withdraw a request while it's still pending. Without `AssignTraining`, they see and update only their own training. Private details (phone and personal email) are shown only to HR and to the person themselves, and the API leaves them out of everyone else's responses.
 
 ### The sample data
 
