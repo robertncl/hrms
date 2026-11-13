@@ -11,9 +11,9 @@ import { Observable, mergeMap, of, throwError, timer } from 'rxjs';
 import { Employee, PRIVATE_EMPLOYEE_FIELDS } from '../infrastructure/types/employee';
 import { Enrollment } from '../infrastructure/types/course';
 import { Permissions } from '../infrastructure/types/permissions';
-import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
+import { TIME_OFF_STATUSES, TIME_OFF_TYPES, TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { inScope, scopeOf } from '../shared/functions/org';
-import { leaveBalances, leaveProblem, workingDays } from '../shared/functions/leave';
+import { dateRangeProblem, leaveBalances, leaveProblem, workingDays } from '../shared/functions/leave';
 import {
     DEMO_ACCOUNTS,
     DEMO_DOMAIN,
@@ -283,12 +283,40 @@ export class DemoBackend {
         if (!person) {
             return fail(400, 'Unknown employee');
         }
-        if (approving && request.startDate <= request.endDate
-            && workingDays(request.startDate, request.endDate, person.location) === 0) {
+        if (!TIME_OFF_TYPES.includes(request.type)) {
+            return fail(400, 'Unknown type of leave');
+        }
+        const range = dateRangeProblem(request.startDate, request.endDate);
+        if (range) {
+            return fail(422, range);
+        }
+        if (approving && workingDays(request.startDate, request.endDate, person.location) === 0) {
             return null;
         }
         const problem = leaveProblem(person, this.db['time-off-requests'], request);
         return problem ? fail(422, problem) : null;
+    }
+
+    /**
+     * Any change to a request is checked like a booking: approving it, and
+     * also moving its dates, type or person after it was booked or approved,
+     * so approved leave can't be stretched past the balance afterwards.
+     */
+    private timeOffChangeRefusal(before: TimeOffRequest, after: TimeOffRequest): Result | null {
+        if (!TIME_OFF_STATUSES.includes(after.status)) {
+            return fail(400, 'Unknown status');
+        }
+        const moved = (['employeeId', 'type', 'startDate', 'endDate'] as const).some(key => before[key] !== after[key]);
+        const approving = after.status === 'Approved' && before.status !== 'Approved';
+        if (!moved && !approving) {
+            return null;
+        }
+        if (after.status === 'Rejected') {
+            // Declined leave costs nothing, but its dates still have to make sense.
+            const range = dateRangeProblem(after.startDate, after.endDate);
+            return range ? fail(422, range) : null;
+        }
+        return this.leaveRefusal(after, approving && !moved);
     }
 
     private rest(collection: Collection, idSegment: string | undefined, req: HttpRequest<unknown>, query: URLSearchParams): Result {
@@ -345,9 +373,9 @@ export class DemoBackend {
                 const next = (req.method === 'PATCH'
                     ? { ...rows[index], ...body, id: rows[index].id }
                     : { ...body, id: rows[index].id }) as Row;
-                const approving = collection === 'time-off-requests'
-                    && next['status'] === 'Approved' && rows[index]['status'] !== 'Approved';
-                const refused = approving ? this.leaveRefusal(next as unknown as TimeOffRequest, true) : null;
+                const refused = collection === 'time-off-requests'
+                    ? this.timeOffChangeRefusal(rows[index] as unknown as TimeOffRequest, next as unknown as TimeOffRequest)
+                    : null;
                 if (refused) {
                     return refused;
                 }

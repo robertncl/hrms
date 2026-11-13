@@ -1,5 +1,5 @@
 import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.type';
-import { entitlement, isWorkingDay, leaveBalances, leaveProblem, workingDays } from './leave';
+import { dateRangeProblem, entitlement, isWorkingDay, leaveBalances, leaveProblem, workingDays } from './leave';
 
 describe('leave', () => {
   const request = (id: number, type: TimeOffRequest['type'], startDate: string, endDate: string, status: TimeOffRequest['status'] = 'Approved', employeeId = 1): TimeOffRequest =>
@@ -109,6 +109,28 @@ describe('leave', () => {
     it('should refuse dates with no working days, or that run backwards', () => {
       expect(leaveProblem(londoner, [], { type: 'Vacation', startDate: '2026-11-14', endDate: '2026-11-15' })).toContain('weekends or public holidays');
       expect(leaveProblem(londoner, [], { type: 'Vacation', startDate: '2026-11-13', endDate: '2026-11-12' })).toContain("can't be before");
+    });
+  });
+
+  describe('date ranges', () => {
+    it('should accept a real range of up to a year', () => {
+      expect(dateRangeProblem('2027-01-01', '2027-12-31')).toBeNull();
+      expect(dateRangeProblem('2028-01-01', '2028-12-31')).toBeNull(); // a leap year: 366 days
+      expect(dateRangeProblem('2027-03-01', '2027-03-01')).toBeNull();
+    });
+
+    it('should refuse anything longer, backwards or not a real date', () => {
+      expect(dateRangeProblem('2027-01-01', '2028-01-02')).toBe('Book at most a year at a time.');
+      expect(dateRangeProblem('2027-03-02', '2027-03-01')).toBe("The last day can't be before the first day.");
+      expect(dateRangeProblem('2027-02-29', '2027-03-01')).toBe('Pick a first and a last day.');
+      expect(dateRangeProblem('', '2027-03-01')).toBe('Pick a first and a last day.');
+      expect(dateRangeProblem(20270301, '2027-03-01')).toBe('Pick a first and a last day.');
+    });
+
+    it('should check the range before counting days', () => {
+      const person = { id: 1, location: 'London' as const };
+      expect(leaveProblem(person, [], { type: 'Maternity Leave', startDate: '0001-01-01', endDate: '9999-12-31' }))
+        .toBe('Book at most a year at a time.');
     });
   });
 });

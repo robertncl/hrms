@@ -50,7 +50,7 @@ function calendarFor(location: string | undefined): Set<string> {
 }
 
 const iso = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  `${String(date.getFullYear()).padStart(4, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const parse = (date: string) => new Date(`${date}T00:00:00`);
 
 export function isWorkingDay(date: string, location?: string): boolean {
@@ -121,6 +121,26 @@ export function leaveBalances(employee: Person, requests: TimeOffRequest[], year
   });
 }
 
+/** The longest single request: a year. Longer leave is booked in parts. */
+export const MAX_LEAVE_SPAN_DAYS = 366;
+
+/** A real calendar date written yyyy-mm-dd. */
+export function isIsoDate(date: unknown): date is string {
+  return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) && iso(parse(date)) === date;
+}
+
+/**
+ * Why a date range can't be a request at all, or null when it can. Checked
+ * before anything walks the range day by day, so nothing ever walks a huge one.
+ */
+export function dateRangeProblem(startDate: unknown, endDate: unknown): string | null {
+  if (!isIsoDate(startDate) || !isIsoDate(endDate)) return 'Pick a first and a last day.';
+  if (endDate < startDate) return "The last day can't be before the first day.";
+  const span = Math.round((parse(endDate).getTime() - parse(startDate).getTime()) / 86_400_000) + 1;
+  if (span > MAX_LEAVE_SPAN_DAYS) return 'Book at most a year at a time.';
+  return null;
+}
+
 const plural = (count: number) => `${count} ${count === 1 ? 'day' : 'days'}`;
 const label = (type: LeaveType) => (type === 'Other' ? 'personal leave' : type.toLowerCase());
 
@@ -133,7 +153,8 @@ export function leaveProblem(
   requests: TimeOffRequest[],
   request: Pick<TimeOffRequest, 'type' | 'startDate' | 'endDate'> & { id?: number },
 ): string | null {
-  if (request.endDate < request.startDate) return "The last day can't be before the first day.";
+  const range = dateRangeProblem(request.startDate, request.endDate);
+  if (range) return range;
   if (workingDays(request.startDate, request.endDate, employee.location) === 0) {
     return 'Those dates are all weekends or public holidays, so no leave is needed.';
   }

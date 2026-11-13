@@ -620,12 +620,11 @@ describe('DemoBackend', () => {
       expect(await message(book(2, 'Maternity Leave', '2027-02-01', '2027-07-30'))).toBe('allowed');
     });
 
-    it('should refuse to approve a request that has grown past the balance', async () => {
+    it('should refuse to grow a pending request, or approve it, past the balance', async () => {
       const booked = await book(2, 'Other', '2027-06-07', '2027-06-09');
-      await request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '2027-06-11' }));
 
       const refusal = '422 This needs 5 days of personal leave in 2027, and only 3 of 3 are left.';
-      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Approved' })))).toBe(refusal);
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '2027-06-11' })))).toBe(refusal);
       expect(await message(request(http.put(`/time-off-requests/${booked.id}`, { ...booked, endDate: '2027-06-11', status: 'Approved' }))))
         .toBe(refusal);
       // Declining it is always possible.
@@ -660,6 +659,34 @@ describe('DemoBackend', () => {
       // No People record and no approvals: nothing to show.
       await signIn('recruiter@acme.com');
       expect(await people()).toEqual([]);
+    });
+
+    it('should not let approved leave be stretched past the balance afterwards', async () => {
+      const booked = await book(2, 'Other', '2027-06-07', '2027-06-08');
+      await request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Approved' }));
+
+      // Five working days of personal leave against an allowance of three.
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '2027-06-11' }))))
+        .toBe('422 This needs 5 days of personal leave in 2027, and only 3 of 3 are left.');
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { type: 'Sick Leave', endDate: '2027-07-30' }))))
+        .toContain('422 This needs 40 days of sick leave');
+      // A change that still fits goes through, without counting the request against itself.
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '2027-06-09' })))).toBe('allowed');
+      expect(await balance(2, 'Other')).toEqual(jasmine.objectContaining({ taken: 3, remaining: 0 }));
+    });
+
+    it('should refuse dates that are not real, or a range longer than a year', async () => {
+      expect(await message(book(2, 'Maternity Leave', '0001-01-01', '9999-12-31'))).toBe('422 Book at most a year at a time.');
+      expect(await message(book(2, 'Vacation', '2027-02-30', '2027-03-01'))).toBe('422 Pick a first and a last day.');
+      expect(await message(book(2, 'Vacation', 'soon', '2027-03-01'))).toBe('422 Pick a first and a last day.');
+      expect(await message(book(2, 'Holiday' as TimeOffRequest['type'], '2027-06-07', '2027-06-07'))).toBe('400 Unknown type of leave');
+
+      const booked = await book(2, 'Vacation', '2027-06-07', '2027-06-07');
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '9999-12-31' }))))
+        .toBe('422 Book at most a year at a time.');
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Rejected', startDate: 'x' }))))
+        .toBe('422 Pick a first and a last day.');
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Done' })))).toBe('400 Unknown status');
     });
 
     it('should need a session and only answer reads', async () => {

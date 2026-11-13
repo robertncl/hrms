@@ -435,6 +435,7 @@ export class TimeOffManagementComponent {
     const person = employeeId === null ? undefined : this.byId().get(employeeId);
     if (!person || !startDate || !endDate) return null;
     const problem = leaveProblem(person, this.allRequests(), { type, startDate, endDate });
+    if (problem) return { problem, days: 0, balance: undefined };
     const year = new Date(`${startDate}T00:00:00`).getFullYear();
     return {
       problem,
