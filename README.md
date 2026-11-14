@@ -37,7 +37,7 @@ Each user type is a set of permissions (`ROLE_PERMISSIONS` in `src/app/demo/demo
 | Create, edit and delete courses (`ManageCourses`) | ✓ | | | ✓ | |
 | Act for anyone in the company, not only your own reports (`OrgWideAccess`) | ✓ | | | ✓ | |
 
-Without `ApproveTimeOff`, people book time off only for themselves and can withdraw a request while it's still pending. Without `AssignTraining`, they see and update only their own training. Private details (phone and personal email) are shown only to HR and to the person themselves.
+Without `ApproveTimeOff`, people book time off only for themselves and can withdraw a request while it's still pending. Without `AssignTraining`, they see and update only their own training. Private details (phone and personal email) are shown only to HR and to the person themselves, and the API leaves them out of everyone else's responses.
 
 A permission says what someone can do; `OrgWideAccess` says for whom. Without it, editing people, deciding time off and assigning training reach only the people in your reporting line: your direct reports and everyone below them, never yourself. So the Team Lead can't approve her own time off or act for the Design and Quality team, and the API answers `403` ("You can only do this for people who report to you.") if she tries. The rule lives in `src/app/shared/functions/org.ts` and is applied by both the screens and the demo API.
 

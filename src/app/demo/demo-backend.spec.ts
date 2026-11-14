@@ -492,6 +492,48 @@ describe('DemoBackend', () => {
   });
 
   describe('employee details', () => {
+    it("should send phone and personal email only to HR and the person themselves", async () => {
+      // HR sees everyone's.
+      expect((await request(http.get<Employee>('/employees/2'))).phone).toBeDefined();
+
+      await signIn('employee@acme.com');
+      const everyone = await request(http.get<Employee[]>('/employees'));
+      const others = everyone.filter((e) => e.id !== 15);
+      expect(others.every((e) => e.phone === undefined && e.personalEmail === undefined)).toBeTrue();
+      // The directory itself stays complete.
+      expect(others.every((e) => !!e.firstName && !!e.email)).toBeTrue();
+      const own = everyone.find((e) => e.id === 15)!;
+      expect(own.phone).toBeDefined();
+      expect(own.personalEmail).toBeDefined();
+      expect((await request(http.get<Employee>('/employees/2'))).phone).toBeUndefined();
+
+      // A lead can edit people, but still doesn't get their private details back.
+      await signIn('lead@acme.com');
+      const updated = await request(http.patch<Employee>('/employees/2', { level: 'Lead' }));
+      expect(updated.level).toBe('Lead');
+      expect(updated.phone).toBeUndefined();
+    });
+
+    it("should not let a filter probe someone else's private details", async () => {
+      const liam = await request(http.get<Employee>('/employees/2'));
+      await signIn('employee@acme.com');
+      expect(await request(http.get<Employee[]>(`/employees?phone=${encodeURIComponent(liam.phone!)}`))).toEqual([]);
+      expect(await request(http.get<Employee[]>(`/employees?personalEmail_like=${liam.personalEmail!.slice(0, 4)}`))).toEqual([]);
+      // Their own still matches.
+      const own = await request(http.get<Employee[]>('/employees?phone_like=7946 0115'));
+      expect(own.map((e) => e.id)).toEqual([15]);
+    });
+
+    it('should treat a PUT that leaves private details out as changing them', async () => {
+      const liam = await request(http.get<Employee>('/employees/2'));
+      const { phone, personalEmail, ...rest } = liam;
+      await signIn('lead@acme.com');
+      await expectError(request(http.put('/employees/2', { ...rest, level: 'Lead' })), 403);
+
+      await signIn('admin@acme.com');
+      expect((await request(http.get<Employee>('/employees/2'))).phone).toBe(phone);
+    });
+
     it('should give every seeded person a start date, location, phone and personal email', async () => {
       const employees = await request(http.get<Employee[]>('/employees'));
       for (const person of employees) {

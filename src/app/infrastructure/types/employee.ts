@@ -22,6 +22,12 @@ export type Employee = {
 /** Fields only HR (EditEmployeePrivateDetails) may change. */
 export const PRIVATE_EMPLOYEE_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'personalEmail'] as const;
 
+/**
+ * The private details that are also kept out of sight: only HR and the person
+ * themselves get them from the API. Name and work email stay in the directory.
+ */
+export const CONFIDENTIAL_EMPLOYEE_FIELDS = ['phone', 'personalEmail'] as const;
+
 export const DEPARTMENTS = ['Engineering', 'Design', 'Quality', 'Delivery'] as const;
 export type Department = (typeof DEPARTMENTS)[number];
 
