@@ -84,6 +84,9 @@ function session(account: DemoAccount) {
  * (`/employees`, `/employees/:id`, `?firstName_like=`) plus `/api/auth/*`,
  * and persists every change to localStorage until `reset()` is called.
  */
+/** What decides how much leave a request uses. */
+const LEAVE_COST_FIELDS = ['employeeId', 'type', 'startDate', 'endDate'] as const;
+
 @Injectable({ providedIn: 'root' })
 export class DemoBackend {
     /** Simulated network latency, so loading states are visible. */
@@ -348,9 +351,13 @@ export class DemoBackend {
                 const next = (req.method === 'PATCH'
                     ? { ...rows[index], ...body, id: rows[index].id }
                     : { ...body, id: rows[index].id }) as Row;
-                const approving = collection === 'time-off-requests'
-                    && next['status'] === 'Approved' && rows[index]['status'] !== 'Approved';
-                const refused = approving ? this.leaveRefusal(next as unknown as TimeOffRequest, true) : null;
+                // Approved leave has to fit the balance: check it on approval, and
+                // again whenever an approved request changes what it costs.
+                const before = rows[index];
+                const checkBalance = collection === 'time-off-requests' && next['status'] === 'Approved'
+                    && (before['status'] !== 'Approved'
+                        || LEAVE_COST_FIELDS.some(field => next[field] !== before[field]));
+                const refused = checkBalance ? this.leaveRefusal(next as unknown as TimeOffRequest, true) : null;
                 if (refused) {
                     return refused;
                 }

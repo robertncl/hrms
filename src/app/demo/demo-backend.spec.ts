@@ -674,6 +674,26 @@ describe('DemoBackend', () => {
       expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Rejected' })))).toBe('allowed');
     });
 
+    it('should refuse to grow approved leave past the balance', async () => {
+      const booked = await book(2, 'Other', '2027-06-07', '2027-06-09');
+      await request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Approved' }));
+      const approved = { ...booked, status: 'Approved' };
+
+      const refusal = '422 This needs 5 days of personal leave in 2027, and only 3 of 3 are left.';
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '2027-06-11' })))).toBe(refusal);
+      expect(await message(request(http.put(`/time-off-requests/${booked.id}`, { ...approved, endDate: '2027-06-11' }))))
+        .toBe(refusal);
+      expect(await balance(2, 'Other')).toEqual(jasmine.objectContaining({ taken: 3, remaining: 0 }));
+
+      // Moving it to another type is checked against that type's balance.
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { type: 'Vacation' })))).toBe('allowed');
+      // Shrinking it, or changing nothing that costs leave, is fine.
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { type: 'Other', endDate: '2027-06-08' }))))
+        .toBe('allowed');
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Approved' })))).toBe('allowed');
+      expect(await balance(2, 'Other')).toEqual(jasmine.objectContaining({ taken: 2, remaining: 1 }));
+    });
+
     it('should reduce the allowance in the year somebody joins', async () => {
       // Charlotte joined 42 days ago, so her first year is a part of the full 25 days.
       const joined = seed.employees[14].startDate!;
