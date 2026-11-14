@@ -11,6 +11,9 @@ import { Observable, mergeMap, of, throwError, timer } from 'rxjs';
 import { CONFIDENTIAL_EMPLOYEE_FIELDS, Employee, PRIVATE_EMPLOYEE_FIELDS } from '../infrastructure/types/employee';
 import { Enrollment } from '../infrastructure/types/course';
 import { Permissions } from '../infrastructure/types/permissions';
+import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
+import { inScope, scopeOf } from '../shared/functions/org';
+import { leaveBalances, leaveProblem, workingDays } from '../shared/functions/leave';
 import {
     DEMO_ACCOUNTS,
     DEMO_DOMAIN,
@@ -48,8 +51,10 @@ const ACTIONS: Record<Permissions, string> = {
     ManageHiring: 'work on hiring',
     AssignTraining: 'assign training',
     ManageCourses: 'change the course catalog',
+    OrgWideAccess: 'act outside your own team',
 };
 const forbidden = (permission: Permissions): Result => fail(403, `Your role can't ${ACTIONS[permission]}.`);
+const outsideTeam = (): Result => fail(403, 'You can only do this for people who report to you.');
 
 /** Tokens name the account they were issued to: `demo.<base64 email>.<random>`. */
 const issueToken = (email: string) => `demo.${btoa(encodeURIComponent(email))}.${randomId()}`;
@@ -93,6 +98,8 @@ export class DemoBackend {
         let result: Result;
         if (first === 'api' && second === 'auth' && third && rest.length === 0) {
             result = this.auth(third, req);
+        } else if (first === 'leave-balances' && !second) {
+            result = this.balances(req, url.searchParams);
         } else if (COLLECTIONS.includes(first as Collection) && !third) {
             result = this.rest(first as Collection, second, req, url.searchParams);
         } else {
@@ -189,6 +196,15 @@ export class DemoBackend {
         const permissions = permissionsFor(account.role);
         const need = (permission: Permissions) => (permissions[permission] ? null : forbidden(permission));
         const own = (employeeId: unknown) => account.employeeId !== undefined && employeeId === account.employeeId;
+        // A permission says what you may do; scope says for whom. Without
+        // OrgWideAccess that is your own reporting line, never yourself.
+        const scope = this.scope(account);
+        const within = (employeeId: unknown) => scope === null || (typeof employeeId === 'number' && scope.has(employeeId));
+        // New rows name their person in the body; existing ones already have one.
+        const subject = method === 'POST' ? body['employeeId'] : row?.['employeeId'];
+        // Handing an existing row to somebody else needs that person in scope too.
+        const moved = method !== 'POST' && 'employeeId' in body && body['employeeId'] !== subject;
+        const covered = () => (within(subject) && (!moved || within(body['employeeId'])) ? null : outsideTeam());
 
         switch (collection) {
             case 'employees': {
@@ -198,29 +214,83 @@ export class DemoBackend {
                 // A PUT replaces the whole record, so leaving a private field out clears it.
                 const changesPrivate = PRIVATE_EMPLOYEE_FIELDS.some(field =>
                     (method === 'PUT' || field in body) && body[field] !== row?.[field]);
-                return need('EditEmployeeGeneralDetails') ?? (changesPrivate ? need('EditEmployeePrivateDetails') : null);
+                return need('EditEmployeeGeneralDetails')
+                    ?? (within(row?.id) ? null : outsideTeam())
+                    ?? (changesPrivate ? need('EditEmployeePrivateDetails') : null);
             }
             case 'time-off-requests':
-                if (method === 'GET' || permissions.ApproveTimeOff) return null;
-                // Without approval rights people manage only their own requests:
-                // book them, and withdraw them while they are still pending.
+                if (method === 'GET') return null;
+                // Everyone manages their own requests: they book them, and
+                // withdraw them while they are still pending.
                 if (method === 'POST' && own(body['employeeId'])) return null;
                 if (method === 'DELETE' && row && own(row['employeeId']) && row['status'] === 'Pending') return null;
-                return forbidden('ApproveTimeOff');
+                return need('ApproveTimeOff') ?? covered();
             case 'candidates':
                 return need('ManageHiring');
             case 'courses':
                 return method === 'GET' ? null : need('ManageCourses');
             case 'enrollments': {
-                if (method === 'GET' || permissions.AssignTraining) return null;
+                if (method === 'GET') return null;
                 // Learners can record their own progress, and nothing else.
                 const onlyProgress = Object.keys(body).every(key => key === 'completedModules');
                 if ((method === 'PATCH') && row && own(row['employeeId']) && onlyProgress) return null;
-                return forbidden('AssignTraining');
+                return need('AssignTraining') ?? covered();
             }
             case 'projects':
                 return null;
         }
+    }
+
+    private scope(account: DemoAccount): Set<number> | null {
+        return scopeOf(this.db.employees, {
+            orgWide: permissionsFor(account.role).OrgWideAccess,
+            employeeId: account.employeeId,
+        });
+    }
+
+    /**
+     * GET /leave-balances?employeeId=&year= — what each person has left to
+     * book. People see their own; approvers also see the people in their scope.
+     */
+    private balances(req: HttpRequest<unknown>, query: URLSearchParams): Result {
+        const account = this.signedIn(req);
+        if (!account) {
+            return fail(401, 'Your session has ended. Sign in again.');
+        }
+        if (req.method !== 'GET') {
+            return fail(405, 'Method not allowed');
+        }
+        const scope = permissionsFor(account.role).ApproveTimeOff ? this.scope(account) : new Set<number>();
+        const visible = (id: number) => id === account.employeeId || inScope(scope, id);
+        const year = Number(query.get('year')) || new Date().getFullYear();
+        const requested = query.get('employeeId');
+
+        if (requested !== null && !visible(Number(requested))) {
+            return fail(403, 'You can only see leave balances for yourself and the people who report to you.');
+        }
+        const people = this.db.employees.filter(e => (requested === null ? visible(e.id) : e.id === Number(requested)));
+        return ok(people.flatMap(person => leaveBalances(person, this.db['time-off-requests'], year)));
+    }
+
+    /**
+     * Leave has to fit the person's balance, both when it is booked and when
+     * it is approved. A request that costs no working days can't be booked,
+     * but one already on file can still be approved: it uses nothing.
+     */
+    private leaveRefusal(
+        request: Pick<TimeOffRequest, 'employeeId' | 'type' | 'startDate' | 'endDate'> & { id?: number },
+        approving = false,
+    ): Result | null {
+        const person = this.db.employees.find(e => e.id === request.employeeId);
+        if (!person) {
+            return fail(400, 'Unknown employee');
+        }
+        if (approving && request.startDate <= request.endDate
+            && workingDays(request.startDate, request.endDate, person.location) === 0) {
+            return null;
+        }
+        const problem = leaveProblem(person, this.db['time-off-requests'], request);
+        return problem ? fail(422, problem) : null;
     }
 
     private rest(collection: Collection, idSegment: string | undefined, req: HttpRequest<unknown>, query: URLSearchParams): Result {
@@ -251,6 +321,8 @@ export class DemoBackend {
                     const created = {
                         ...defaultsFor(collection),
                         ...body,
+                        // Booking and deciding are separate steps: nobody books leave already approved.
+                        ...(collection === 'time-off-requests' ? { status: 'Pending' } : {}),
                         id: nextId(rows),
                     } as Row;
                     rows.push(this.normalize(collection, created));
@@ -272,11 +344,19 @@ export class DemoBackend {
             case 'GET':
                 return ok(this.view(collection, rows[index], account));
             case 'PATCH':
-                rows[index] = this.normalize(collection, { ...rows[index], ...body, id: rows[index].id });
+            case 'PUT': {
+                const next = (req.method === 'PATCH'
+                    ? { ...rows[index], ...body, id: rows[index].id }
+                    : { ...body, id: rows[index].id }) as Row;
+                const approving = collection === 'time-off-requests'
+                    && next['status'] === 'Approved' && rows[index]['status'] !== 'Approved';
+                const refused = approving ? this.leaveRefusal(next as unknown as TimeOffRequest, true) : null;
+                if (refused) {
+                    return refused;
+                }
+                rows[index] = this.normalize(collection, next);
                 return ok(this.view(collection, rows[index], account));
-            case 'PUT':
-                rows[index] = this.normalize(collection, { ...body, id: rows[index].id } as Row);
-                return ok(this.view(collection, rows[index], account));
+            }
             case 'DELETE':
                 rows.splice(index, 1);
                 if (collection === 'employees') {
@@ -327,6 +407,9 @@ export class DemoBackend {
             if (this.db.enrollments.some(e => e.courseId === body['courseId'] && e.employeeId === body['employeeId'])) {
                 return fail(409, 'This employee is already enrolled in the course');
             }
+        }
+        if (collection === 'time-off-requests') {
+            return this.leaveRefusal(body as unknown as TimeOffRequest);
         }
         return null;
     }
@@ -431,22 +514,26 @@ function migrate(stored: Partial<DemoDatabase>): DemoDatabase {
     db.users = db.users
         .filter(u => !builtIn.has(u.email.toLowerCase()) && !u.email.toLowerCase().endsWith(`@${LEGACY_DEMO_DOMAIN}`))
         .map(({ name, email, password, role }) => ({ name, email, password, role: role ?? 'HR Administrator' }));
-    // Seeded people saved before employee details existed get them filled in.
+    // Seeded people saved before a detail existed get it filled in. Whatever
+    // the visitor set themselves (including a cleared manager) is left alone.
     const seeded = new Map(seed.employees.map(e => [e.id, e]));
     const ids = new Set(db.employees.map(e => e.id));
     db.employees = db.employees.map(e => {
         const fresh = seeded.get(e.id);
-        if (!fresh || e.startDate || fresh.firstName !== e.firstName || fresh.lastName !== e.lastName) {
+        if (!fresh || fresh.firstName !== e.firstName || fresh.lastName !== e.lastName) {
             return e;
         }
-        const { startDate, location, managerId, phone, personalEmail } = fresh;
+        const { department, jobTitle, startDate, location, managerId, phone, personalEmail } = fresh;
+        const hadDetails = e.startDate !== undefined;
         return {
-            ...e,
+            department,
+            jobTitle,
             startDate,
             location,
-            ...(managerId && ids.has(managerId) ? { managerId } : {}),
+            ...(!hadDetails && managerId && ids.has(managerId) ? { managerId } : {}),
             phone,
             personalEmail,
+            ...e,
         };
     });
     return db;

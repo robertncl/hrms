@@ -19,6 +19,8 @@ import { CourseService } from 'src/app/services/course.service';
 import { EnrollmentService } from 'src/app/services/enrollment.service';
 import { EmployeeService } from 'src/app/services/employee.service';
 import { PermissionsService } from 'src/app/services/permissions.service';
+import { AccessScope } from 'src/app/services/access-scope.service';
+import { inScope } from 'src/app/shared/functions/org';
 import { AuthService } from 'src/app/services/auth.service';
 import { AvatarComponent } from 'src/app/shared/components/avatar.component';
 import { ConfirmationDialogComponent } from 'src/app/shared/components/confirmation-dialog.component';
@@ -137,7 +139,7 @@ const DEFAULT_DUE_DAYS = 30;
                         <button class="btn btn-sm" type="button" [disabled]="busy()"
                           (click)="setModules(enrollment, course.modules.length)">Mark complete</button>
                       }
-                      @if (canAssign()) {
+                      @if (manages(enrollment)) {
                         <button class="btn btn-sm btn-ghost" type="button" [disabled]="busy()" (click)="unenroll(enrollment)">Unenroll</button>
                       }
                     </td>
@@ -309,10 +311,18 @@ export class CourseDetailsComponent {
     );
   });
   /** The table: everyone for assigners, just your own enrollment otherwise. */
+  private readonly access = inject(AccessScope);
+  /** Whose training this viewer manages: everyone org-wide, otherwise their reporting line. */
+  private readonly scope = computed(() => this.access.of(this.employees()));
+
+  /** True when the viewer assigns and unenrolls for this person, not just tracks their own progress. */
+  manages(enrollment: Enrollment): boolean {
+    return this.canAssign() && inScope(this.scope(), enrollment.employeeId);
+  }
+
+  /** The table: the people this viewer manages, plus their own enrollment. */
   rows = computed(() =>
-    this.canAssign()
-      ? this.enrollments()
-      : this.enrollments().filter((e) => e.employeeId === this.user()?.employeeId),
+    this.enrollments().filter((e) => this.manages(e) || e.employeeId === this.user()?.employeeId),
   );
   completedCount = computed(() => this.enrollments().filter((e) => e.status === 'Completed').length);
   overdueCount = computed(() => this.enrollments().filter((e) => isOverdue(e)).length);
@@ -324,7 +334,7 @@ export class CourseDetailsComponent {
     const term = this.assignSearch().trim().toLowerCase();
     return this.employees().filter(
       (e: Employee) =>
-        !enrolled.has(e.id) && (!term || `${e.firstName} ${e.lastName} ${e.position}`.toLowerCase().includes(term)),
+        !enrolled.has(e.id) && inScope(this.scope(), e.id) && (!term || `${e.firstName} ${e.lastName} ${e.position}`.toLowerCase().includes(term)),
     );
   });
 

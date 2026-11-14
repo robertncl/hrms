@@ -9,6 +9,7 @@ import { Project } from '../infrastructure/types/project';
 import { Candidate } from '../infrastructure/types/candidate';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { Course, Enrollment } from '../infrastructure/types/course';
+import { LeaveBalance, nextWorkingDay } from '../shared/functions/leave';
 
 describe('DemoBackend', () => {
   let http: HttpClient;
@@ -103,9 +104,9 @@ describe('DemoBackend', () => {
   });
 
   it('should derive availability from approved time off covering today', async () => {
-    const today = daysFromToday(0);
+    // A week around today always holds a working day, and this type has no balance to run out.
     const created = await request(http.post<TimeOffRequest>('/time-off-requests', {
-      employeeId: 1, startDate: today, endDate: today, type: 'Other',
+      employeeId: 1, startDate: daysFromToday(-3), endDate: daysFromToday(3), type: 'Maternity Leave',
     }));
     expect(created.status).toBe('Pending');
     expect((await request(http.get<Employee>('/employees/1'))).isAvailable).toBeTrue();
@@ -326,6 +327,70 @@ describe('DemoBackend', () => {
         return `${status} ${body?.message ?? ''}`.trim();
       }
     };
+    /** A month out, moved off any weekend or public holiday so it costs exactly one day of leave. */
+    const aWorkingDay = nextWorkingDay(daysFromToday(30), 'London');
+    const OUTSIDE_TEAM = '403 You can only do this for people who report to you.';
+
+    describe('a team lead, who acts only for their own reporting line', () => {
+      // Olivia (1) leads Liam (2) directly and Henry (18) through Evelyn (17).
+      // Ava (3) and Harper (13) report to Sophia.
+      beforeEach(() => signIn('lead@acme.com'));
+
+      it('should edit direct and indirect reports, but nobody else and not themselves', async () => {
+        expect(await refusal(request(http.patch('/employees/2', { level: 'Lead' })))).toBe('allowed');
+        expect(await refusal(request(http.patch('/employees/18', { level: 'Senior' })))).toBe('allowed');
+        expect(await refusal(request(http.patch('/employees/3', { level: 'Lead' })))).toBe(OUTSIDE_TEAM);
+        expect(await refusal(request(http.patch('/employees/1', { level: 'Senior' })))).toBe(OUTSIDE_TEAM);
+        expect(await refusal(request(http.put('/employees/3', { ...seed.employees[2], level: 'Lead' })))).toBe(OUTSIDE_TEAM);
+      });
+
+      it("should decide their reports' time off, but not another team's", async () => {
+        // Request 4 is Liam's; 6 is Harper's.
+        expect(await refusal(request(http.patch('/time-off-requests/4', { status: 'Approved' })))).toBe('allowed');
+        expect(await refusal(request(http.patch('/time-off-requests/6', { status: 'Approved' })))).toBe(OUTSIDE_TEAM);
+        expect(await refusal(request(http.patch('/time-off-requests/6', { status: 'Rejected' })))).toBe(OUTSIDE_TEAM);
+        expect(await refusal(request(http.delete('/time-off-requests/6')))).toBe(OUTSIDE_TEAM);
+      });
+
+      it('should book for a report, but not for someone on another team', async () => {
+        const booking = { startDate: aWorkingDay, endDate: aWorkingDay, type: 'Vacation' };
+        expect(await refusal(request(http.post('/time-off-requests', { ...booking, employeeId: 18 })))).toBe('allowed');
+        expect(await refusal(request(http.post('/time-off-requests', { ...booking, employeeId: 3 })))).toBe(OUTSIDE_TEAM);
+      });
+
+      it('should book their own time off but leave the decision to someone else', async () => {
+        const own = await request(http.post<TimeOffRequest>('/time-off-requests', {
+          employeeId: 1, startDate: aWorkingDay, endDate: aWorkingDay, type: 'Vacation',
+        }));
+        expect(await refusal(request(http.patch(`/time-off-requests/${own.id}`, { status: 'Approved' })))).toBe(OUTSIDE_TEAM);
+        expect(await refusal(request(http.delete(`/time-off-requests/${own.id}`)))).toBe('allowed');
+      });
+
+      it("should not move a report's request onto someone outside the team", async () => {
+        expect(await refusal(request(http.patch('/time-off-requests/4', { employeeId: 3 })))).toBe(OUTSIDE_TEAM);
+      });
+
+      it('should assign and unassign training within the team only', async () => {
+        const assigned = await request(http.post<Enrollment>('/enrollments', { courseId: 4, employeeId: 18 }));
+        expect(await refusal(request(http.delete(`/enrollments/${assigned.id}`)))).toBe('allowed');
+        expect(await refusal(request(http.post('/enrollments', { courseId: 4, employeeId: 3 })))).toBe(OUTSIDE_TEAM);
+
+        const enrollments = await request(http.get<Enrollment[]>('/enrollments'));
+        const other = enrollments.find((e) => e.employeeId === 3)!;
+        expect(await refusal(request(http.patch(`/enrollments/${other.id}`, { dueDate: daysFromToday(90) })))).toBe(OUTSIDE_TEAM);
+        expect(await refusal(request(http.delete(`/enrollments/${other.id}`)))).toBe(OUTSIDE_TEAM);
+      });
+    });
+
+    it('should let HR and the learning coordinator act for anyone', async () => {
+      // HR decides the request of a lead, who can't decide their own.
+      expect(await refusal(request(http.patch('/time-off-requests/6', { status: 'Approved' })))).toBe('allowed');
+      expect(await refusal(request(http.patch('/employees/3', { level: 'Lead' })))).toBe('allowed');
+
+      await signIn('learning@acme.com');
+      expect(await refusal(request(http.post('/enrollments', { courseId: 4, employeeId: 3 })))).toBe('allowed');
+      expect(await refusal(request(http.post('/enrollments', { courseId: 4, employeeId: 18 })))).toBe('allowed');
+    });
 
     it('should let an employee read People but change nothing about other people', async () => {
       await signIn('employee@acme.com');
@@ -339,11 +404,11 @@ describe('DemoBackend', () => {
     it('should let an employee book and withdraw only their own time off', async () => {
       await signIn('employee@acme.com');
       const own = await request(http.post<TimeOffRequest>('/time-off-requests', {
-        employeeId: 15, startDate: daysFromToday(30), endDate: daysFromToday(31), type: 'Vacation',
+        employeeId: 15, startDate: aWorkingDay, endDate: aWorkingDay, type: 'Vacation',
       }));
       expect(own.status).toBe('Pending');
       expect(await refusal(request(http.post('/time-off-requests', {
-        employeeId: 2, startDate: daysFromToday(30), endDate: daysFromToday(31), type: 'Vacation',
+        employeeId: 2, startDate: aWorkingDay, endDate: aWorkingDay, type: 'Vacation',
       })))).toBe("403 Your role can't approve time off.");
       expect(await refusal(request(http.patch(`/time-off-requests/${own.id}`, { status: 'Approved' })))).toContain('403');
       // Someone else's request (Liam's, id 4) stays out of reach.
@@ -351,9 +416,17 @@ describe('DemoBackend', () => {
       expect(await refusal(request(http.delete(`/time-off-requests/${own.id}`)))).toBe('allowed');
     });
 
+    it('should not let anyone book time off that is already approved', async () => {
+      await signIn('employee@acme.com');
+      const own = await request(http.post<TimeOffRequest>('/time-off-requests', {
+        employeeId: 15, startDate: aWorkingDay, endDate: aWorkingDay, type: 'Vacation', status: 'Approved',
+      }));
+      expect(own.status).toBe('Pending');
+    });
+
     it('should not let an employee withdraw a request once it is decided', async () => {
       const own = await request(http.post<TimeOffRequest>('/time-off-requests', {
-        employeeId: 15, startDate: daysFromToday(30), endDate: daysFromToday(31), type: 'Vacation',
+        employeeId: 15, startDate: aWorkingDay, endDate: aWorkingDay, type: 'Vacation',
       }));
       await request(http.patch(`/time-off-requests/${own.id}`, { status: 'Approved' }));
 
@@ -482,7 +555,7 @@ describe('DemoBackend', () => {
 
     it('should fill details into seeded people saved before details existed', () => {
       const old = createDemoDatabase();
-      old.employees = old.employees.map(({ startDate, location, managerId, phone, personalEmail, ...rest }) => rest);
+      old.employees = old.employees.map(({ startDate, location, managerId, phone, personalEmail, department, jobTitle, ...rest }) => rest);
       old.employees[1] = { ...old.employees[1], firstName: 'Renamed' };
       localStorage.setItem('acme-people-db', JSON.stringify(old));
 
@@ -490,9 +563,166 @@ describe('DemoBackend', () => {
       const employees = (migrated as unknown as { db: { employees: Employee[] } }).db.employees;
       expect(employees[0].location).toBe(seed.employees[0].location);
       expect(employees[2].managerId).toBe(seed.employees[2].managerId);
+      expect(employees[0].department).toBe('Engineering');
+      expect(employees[0].jobTitle).toBe('Head of Engineering');
       // Somebody the visitor changed is left exactly as they left it.
       expect(employees[1].firstName).toBe('Renamed');
       expect(employees[1].startDate).toBeUndefined();
+    });
+  });
+
+  describe('org structure', () => {
+    it('should give every seeded person a department and a job title', async () => {
+      const employees = await request(http.get<Employee[]>('/employees'));
+      for (const person of employees) {
+        expect(['Engineering', 'Design', 'Quality', 'Delivery']).withContext(person.firstName).toContain(person.department!);
+        expect(person.jobTitle).withContext(person.firstName).toBeTruthy();
+      }
+    });
+
+    it('should add departments and job titles to people saved before they existed, keeping their other details', () => {
+      const old = createDemoDatabase();
+      old.employees = old.employees.map(({ department, jobTitle, ...rest }) => rest);
+      old.employees[2] = { ...old.employees[2], location: 'Berlin', managerId: 1 };
+      localStorage.setItem('acme-people-db', JSON.stringify(old));
+
+      const migrated = TestBed.runInInjectionContext(() => new DemoBackend());
+      const employees = (migrated as unknown as { db: { employees: Employee[] } }).db.employees;
+      expect(employees[2].department).toBe('Design');
+      expect(employees[2].jobTitle).toBe('Senior Product Designer');
+      // What the visitor changed stays as they left it.
+      expect(employees[2].location).toBe('Berlin');
+      expect(employees[2].managerId).toBe(1);
+    });
+  });
+
+  describe('leave balances', () => {
+    // Fixed dates in a year the holiday calendar covers, so the sums don't move with today.
+    const balancesOf = (employeeId: number, year = 2027) =>
+      request(http.get<LeaveBalance[]>(`/leave-balances?employeeId=${employeeId}&year=${year}`));
+    const balance = async (employeeId: number, type: LeaveBalance['type']) =>
+      (await balancesOf(employeeId)).find((b) => b.type === type)!;
+    const book = (employeeId: number, type: TimeOffRequest['type'], startDate: string, endDate: string) =>
+      request(http.post<TimeOffRequest>('/time-off-requests', { employeeId, type, startDate, endDate }));
+    const message = async (promise: Promise<unknown>) => {
+      try {
+        await promise;
+        return 'allowed';
+      } catch (error) {
+        const { status, error: body } = error as HttpErrorResponse;
+        return `${status} ${body?.message ?? ''}`.trim();
+      }
+    };
+
+    it('should give a full allowance per tracked leave type', async () => {
+      expect((await balancesOf(2)).map((b) => `${b.type} ${b.remaining}/${b.entitlement}`))
+        .toEqual(['Vacation 25/25', 'Sick Leave 10/10', 'Other 3/3']);
+    });
+
+    it('should count working days only: weekends and the office\'s public holidays are free', async () => {
+      // Fri 28 May – Tue 1 June 2027, with the London spring bank holiday on the Monday.
+      await book(2, 'Vacation', '2027-05-28', '2027-06-01');
+      expect(await balance(2, 'Vacation')).toEqual(jasmine.objectContaining({ pending: 2, taken: 0, remaining: 23 }));
+
+      // The same dates in Lisbon, where that Monday is an ordinary working day.
+      await book(8, 'Vacation', '2027-05-28', '2027-06-01');
+      expect((await balance(8, 'Vacation')).pending).toBe(3);
+    });
+
+    it('should move days from pending to taken on approval, and give them back when declined', async () => {
+      const first = await book(2, 'Vacation', '2027-06-07', '2027-06-08');
+      const second = await book(2, 'Vacation', '2027-06-14', '2027-06-14');
+
+      await request(http.patch(`/time-off-requests/${first.id}`, { status: 'Approved' }));
+      expect(await balance(2, 'Vacation')).toEqual(jasmine.objectContaining({ taken: 2, pending: 1, remaining: 22 }));
+
+      await request(http.patch(`/time-off-requests/${second.id}`, { status: 'Rejected' }));
+      expect(await balance(2, 'Vacation')).toEqual(jasmine.objectContaining({ taken: 2, pending: 0, remaining: 23 }));
+    });
+
+    it('should refuse a booking for more days than are left', async () => {
+      expect(await message(book(2, 'Other', '2027-06-07', '2027-06-10')))
+        .toBe('422 This needs 4 days of personal leave in 2027, and only 3 of 3 are left.');
+
+      await book(2, 'Other', '2027-06-07', '2027-06-08');
+      expect(await message(book(2, 'Other', '2027-06-09', '2027-06-10')))
+        .toBe('422 This needs 2 days of personal leave in 2027, and only 1 of 3 are left.');
+      expect(await message(book(2, 'Other', '2027-06-09', '2027-06-09'))).toBe('allowed');
+    });
+
+    it('should refuse a booking that costs no leave or runs backwards', async () => {
+      expect(await message(book(2, 'Vacation', '2027-06-12', '2027-06-13')))
+        .toBe('422 Those dates are all weekends or public holidays, so no leave is needed.');
+      expect(await message(book(2, 'Vacation', '2027-06-10', '2027-06-08')))
+        .toBe("422 The last day can't be before the first day.");
+      expect(await message(book(999, 'Vacation', '2027-06-08', '2027-06-08'))).toBe('400 Unknown employee');
+    });
+
+    it('should not limit leave types without an allowance', async () => {
+      expect(await message(book(2, 'Maternity Leave', '2027-02-01', '2027-07-30'))).toBe('allowed');
+    });
+
+    it('should refuse to approve a request that has grown past the balance', async () => {
+      const booked = await book(2, 'Other', '2027-06-07', '2027-06-09');
+      await request(http.patch(`/time-off-requests/${booked.id}`, { endDate: '2027-06-11' }));
+
+      const refusal = '422 This needs 5 days of personal leave in 2027, and only 3 of 3 are left.';
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Approved' })))).toBe(refusal);
+      expect(await message(request(http.put(`/time-off-requests/${booked.id}`, { ...booked, endDate: '2027-06-11', status: 'Approved' }))))
+        .toBe(refusal);
+      // Declining it is always possible.
+      expect(await message(request(http.patch(`/time-off-requests/${booked.id}`, { status: 'Rejected' })))).toBe('allowed');
+    });
+
+    it('should reduce the allowance in the year somebody joins', async () => {
+      // Charlotte joined 42 days ago, so her first year is a part of the full 25 days.
+      const joined = seed.employees[14].startDate!;
+      const [vacation] = await balancesOf(15, Number(joined.slice(0, 4)));
+      expect(vacation.entitlement).toBeGreaterThan(0);
+      expect(vacation.entitlement).toBeLessThan(25);
+      expect((await balancesOf(15, Number(joined.slice(0, 4)) + 1))[0].entitlement).toBe(25);
+    });
+
+    it('should show people their own balances, and approvers those of the people they decide for', async () => {
+      const people = async () => [...new Set((await request(http.get<LeaveBalance[]>('/leave-balances'))).map((b) => b.employeeId))];
+
+      expect((await people()).length).toBe(seed.employees.length);
+
+      await signIn('employee@acme.com');
+      expect(await people()).toEqual([15]);
+      expect((await balancesOf(15)).length).toBe(3);
+      expect(await message(balancesOf(2)))
+        .toBe('403 You can only see leave balances for yourself and the people who report to you.');
+
+      await signIn('lead@acme.com');
+      expect((await people()).sort((a, b) => a - b)).toEqual([1, 2, 4, 6, 8, 11, 12, 15, 16, 17, 18]);
+      expect(await message(balancesOf(18))).toBe('allowed');
+      expect(await message(balancesOf(3))).toContain('403');
+
+      // No People record and no approvals: nothing to show.
+      await signIn('recruiter@acme.com');
+      expect(await people()).toEqual([]);
+    });
+
+    it('should need a session and only answer reads', async () => {
+      await expectError(request(http.post('/leave-balances', {})), 405);
+      token = null;
+      await expectError(request(http.get('/leave-balances')), 401);
+    });
+
+    it('should seed one-day absences on working days, so approving them costs a day', async () => {
+      const requests = await request(http.get<TimeOffRequest[]>('/time-off-requests'));
+      const moving = requests.find((r) => r.id === 5)!;
+      expect(moving.startDate).toBe(nextWorkingDay(daysFromToday(12), 'Lisbon'));
+      expect(await message(request(http.patch('/time-off-requests/5', { status: 'Approved' })))).toBe('allowed');
+    });
+
+    it('should let every seeded pending request be approved', async () => {
+      const requests = await request(http.get<TimeOffRequest[]>('/time-off-requests'));
+      for (const pending of requests.filter((r) => r.status === 'Pending')) {
+        expect(await message(request(http.patch(`/time-off-requests/${pending.id}`, { status: 'Approved' }))))
+          .withContext(`request ${pending.id}`).toBe('allowed');
+      }
     });
   });
 });

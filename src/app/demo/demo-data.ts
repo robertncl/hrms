@@ -1,10 +1,11 @@
 import { Candidate } from '../infrastructure/types/candidate';
 import { Course, Enrollment } from '../infrastructure/types/course';
-import { Employee } from '../infrastructure/types/employee';
+import { Department, Employee } from '../infrastructure/types/employee';
 import { ALL_PERMISSION_NAMES, Permissions } from '../infrastructure/types/permissions';
 import { Project } from '../infrastructure/types/project';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { User } from '../infrastructure/types/user';
+import { nextWorkingDay } from '../shared/functions/leave';
 
 export type DemoRole = 'HR Administrator' | 'Team Lead' | 'Recruiter' | 'Learning Coordinator' | 'Employee';
 
@@ -34,9 +35,10 @@ export type StoredEnrollment = Omit<Enrollment, 'status' | 'progress'>;
 /** What each kind of user may do. Everyone signed in can see People. */
 export const ROLE_PERMISSIONS: Record<DemoRole, Permissions[]> = {
     'HR Administrator': ALL_PERMISSION_NAMES,
+    // No OrgWideAccess: a lead approves, edits and assigns only within their own reporting line.
     'Team Lead': ['ViewEmployees', 'EditEmployeeGeneralDetails', 'ApproveTimeOff', 'ManageHiring', 'AssignTraining'],
     Recruiter: ['ViewEmployees', 'CreateEmployee', 'ManageHiring'],
-    'Learning Coordinator': ['ViewEmployees', 'AssignTraining', 'ManageCourses'],
+    'Learning Coordinator': ['ViewEmployees', 'AssignTraining', 'ManageCourses', 'OrgWideAccess'],
     Employee: ['ViewEmployees'],
 };
 
@@ -68,7 +70,7 @@ export const DEMO_ACCOUNTS: BuiltInDemoAccount[] = [
         role: 'Team Lead',
         employeeId: 1,
         password: DEMO_PASSWORD,
-        summary: 'Approves time off, runs hiring and assigns training. Edits roles, not private details.',
+        summary: 'For her own team: approves time off, edits roles and assigns training. Also runs hiring.',
     },
     {
         name: 'Priya Shah',
@@ -114,6 +116,8 @@ export function daysFromToday(offset: number, today = new Date()): string {
 }
 
 type EmployeeDetails = {
+    department: Department;
+    jobTitle: string;
     /** Days ago they started. */
     startedDaysAgo: number;
     location: NonNullable<Employee['location']>;
@@ -139,6 +143,8 @@ const employee = (
         // The API derives this from approved time off; the seed value is a fallback.
         isAvailable: true,
         profilePicture: '',
+        department: details.department,
+        jobTitle: details.jobTitle,
         startDate: daysFromToday(-details.startedDaysAgo, today),
         location: details.location,
         ...(details.managerId ? { managerId: details.managerId } : {}),
@@ -150,6 +156,8 @@ const employee = (
 
 export function createDemoDatabase(today = new Date()): DemoDatabase {
     const day = (offset: number) => daysFromToday(offset, today);
+    // One-day absences are moved off weekends and public holidays, where they would cost no leave.
+    const workday = (offset: number, location: string) => nextWorkingDay(day(offset), location);
 
     const person = (
         id: number,
@@ -162,27 +170,27 @@ export function createDemoDatabase(today = new Date()): DemoDatabase {
 
     return {
         users: [],
-        // Two teams: engineering under Olivia Bennett (with Evelyn Kim running
-        // delivery), and design and QA under Sophia Lindqvist.
+        // Two reporting lines: Olivia Bennett heads Engineering, with Evelyn Kim's
+        // Delivery team under her; Sophia Lindqvist heads Design and Quality.
         employees: [
-            person(1, 'Olivia', 'Bennett', 'Manager', 'Lead', { startedDaysAgo: 2240, location: 'London' }),
-            person(2, 'Liam', 'Chen', 'Developer', 'Senior', { startedDaysAgo: 1530, location: 'London', managerId: 1 }),
-            person(3, 'Ava', 'Patel', 'Designer', 'Senior', { startedDaysAgo: 1260, location: 'London', managerId: 7 }),
-            person(4, 'Noah', 'Kowalski', 'Developer', 'Middle', { startedDaysAgo: 975, location: 'Berlin', managerId: 1 }),
-            person(5, 'Mia', 'Okafor', 'QA', 'Senior', { startedDaysAgo: 1830, location: 'Lisbon', managerId: 7 }),
-            person(6, 'Ethan', 'Novak', 'Developer', 'Junior', { startedDaysAgo: 270, location: 'Berlin', managerId: 1 }),
-            person(7, 'Sophia', 'Lindqvist', 'Manager', 'Senior', { startedDaysAgo: 2010, location: 'London' }),
-            person(8, 'Lucas', 'Moreau', 'Developer', 'Lead', { startedDaysAgo: 1826, location: 'Lisbon', managerId: 1 }),
-            person(9, 'Isabella', 'Rossi', 'Designer', 'Middle', { startedDaysAgo: 730, location: 'Remote', managerId: 7 }),
-            person(10, 'Mason', 'Tanaka', 'QA', 'Middle', { startedDaysAgo: 670, location: 'London', managerId: 7 }),
-            person(11, 'Amelia', 'García', 'Developer', 'Senior', { startedDaysAgo: 1095, location: 'Lisbon', managerId: 1 }),
-            person(12, 'Elijah', 'Schmidt', 'Developer', 'Middle', { startedDaysAgo: 820, location: 'Berlin', managerId: 1 }),
-            person(13, 'Harper', 'Nguyen', 'Designer', 'Junior', { startedDaysAgo: 210, location: 'London', managerId: 7 }),
-            person(14, 'James', "O'Connor", 'QA', 'Junior', { startedDaysAgo: 150, location: 'Remote', managerId: 7 }),
-            person(15, 'Charlotte', 'Dubois', 'Developer', 'Junior', { startedDaysAgo: 42, location: 'London', managerId: 1 }),
-            person(16, 'Benjamin', 'Haddad', 'Developer', 'Senior', { startedDaysAgo: 1460, location: 'London', managerId: 1 }),
-            person(17, 'Evelyn', 'Kim', 'Manager', 'Middle', { startedDaysAgo: 490, location: 'Remote', managerId: 1 }),
-            person(18, 'Henry', 'Silva', 'Developer', 'Middle', { startedDaysAgo: 610, location: 'Lisbon', managerId: 17 }),
+            person(1, 'Olivia', 'Bennett', 'Manager', 'Lead', { department: 'Engineering', jobTitle: 'Head of Engineering', startedDaysAgo: 2240, location: 'London' }),
+            person(2, 'Liam', 'Chen', 'Developer', 'Senior', { department: 'Engineering', jobTitle: 'Senior Software Engineer', startedDaysAgo: 1530, location: 'London', managerId: 1 }),
+            person(3, 'Ava', 'Patel', 'Designer', 'Senior', { department: 'Design', jobTitle: 'Senior Product Designer', startedDaysAgo: 1260, location: 'London', managerId: 7 }),
+            person(4, 'Noah', 'Kowalski', 'Developer', 'Middle', { department: 'Engineering', jobTitle: 'Software Engineer', startedDaysAgo: 975, location: 'Berlin', managerId: 1 }),
+            person(5, 'Mia', 'Okafor', 'QA', 'Senior', { department: 'Quality', jobTitle: 'Senior QA Engineer', startedDaysAgo: 1830, location: 'Lisbon', managerId: 7 }),
+            person(6, 'Ethan', 'Novak', 'Developer', 'Junior', { department: 'Engineering', jobTitle: 'Junior Software Engineer', startedDaysAgo: 270, location: 'Berlin', managerId: 1 }),
+            person(7, 'Sophia', 'Lindqvist', 'Manager', 'Senior', { department: 'Design', jobTitle: 'Head of Design and Quality', startedDaysAgo: 2010, location: 'London' }),
+            person(8, 'Lucas', 'Moreau', 'Developer', 'Lead', { department: 'Engineering', jobTitle: 'Lead Software Engineer', startedDaysAgo: 1826, location: 'Lisbon', managerId: 1 }),
+            person(9, 'Isabella', 'Rossi', 'Designer', 'Middle', { department: 'Design', jobTitle: 'Product Designer', startedDaysAgo: 730, location: 'Remote', managerId: 7 }),
+            person(10, 'Mason', 'Tanaka', 'QA', 'Middle', { department: 'Quality', jobTitle: 'QA Engineer', startedDaysAgo: 670, location: 'London', managerId: 7 }),
+            person(11, 'Amelia', 'García', 'Developer', 'Senior', { department: 'Engineering', jobTitle: 'Senior Software Engineer', startedDaysAgo: 1095, location: 'Lisbon', managerId: 1 }),
+            person(12, 'Elijah', 'Schmidt', 'Developer', 'Middle', { department: 'Engineering', jobTitle: 'Software Engineer', startedDaysAgo: 820, location: 'Berlin', managerId: 1 }),
+            person(13, 'Harper', 'Nguyen', 'Designer', 'Junior', { department: 'Design', jobTitle: 'Junior Product Designer', startedDaysAgo: 210, location: 'London', managerId: 7 }),
+            person(14, 'James', "O'Connor", 'QA', 'Junior', { department: 'Quality', jobTitle: 'Junior QA Engineer', startedDaysAgo: 150, location: 'Remote', managerId: 7 }),
+            person(15, 'Charlotte', 'Dubois', 'Developer', 'Junior', { department: 'Engineering', jobTitle: 'Junior Software Engineer', startedDaysAgo: 42, location: 'London', managerId: 1 }),
+            person(16, 'Benjamin', 'Haddad', 'Developer', 'Senior', { department: 'Engineering', jobTitle: 'Senior Software Engineer', startedDaysAgo: 1460, location: 'London', managerId: 1 }),
+            person(17, 'Evelyn', 'Kim', 'Manager', 'Middle', { department: 'Delivery', jobTitle: 'Delivery Manager', startedDaysAgo: 490, location: 'Remote', managerId: 1 }),
+            person(18, 'Henry', 'Silva', 'Developer', 'Middle', { department: 'Delivery', jobTitle: 'Release Engineer', startedDaysAgo: 610, location: 'Lisbon', managerId: 17 }),
         ],
         projects: [
             {
@@ -259,12 +267,12 @@ export function createDemoDatabase(today = new Date()): DemoDatabase {
             { id: 2, employeeId: 9, startDate: day(-1), endDate: day(1), type: 'Sick Leave', status: 'Approved', comment: 'Flu' },
             { id: 3, employeeId: 16, startDate: day(-20), endDate: day(70), type: 'Paternity Leave', status: 'Approved' },
             { id: 4, employeeId: 2, startDate: day(6), endDate: day(10), type: 'Vacation', status: 'Pending', comment: 'Hiking week' },
-            { id: 5, employeeId: 11, startDate: day(12), endDate: day(12), type: 'Other', status: 'Pending', comment: 'Moving house' },
+            { id: 5, employeeId: 11, startDate: workday(12, 'Lisbon'), endDate: workday(12, 'Lisbon'), type: 'Other', status: 'Pending', comment: 'Moving house' },
             { id: 6, employeeId: 13, startDate: day(3), endDate: day(5), type: 'Vacation', status: 'Pending' },
             { id: 7, employeeId: 5, startDate: day(20), endDate: day(30), type: 'Vacation', status: 'Pending', comment: 'Wedding and honeymoon' },
             { id: 8, employeeId: 18, startDate: day(8), endDate: day(9), type: 'Other', status: 'Rejected', comment: 'Conference — overlaps release' },
             { id: 9, employeeId: 6, startDate: day(-14), endDate: day(-10), type: 'Vacation', status: 'Approved' },
-            { id: 10, employeeId: 10, startDate: day(-7), endDate: day(-7), type: 'Sick Leave', status: 'Approved' },
+            { id: 10, employeeId: 10, startDate: workday(-7, 'London'), endDate: workday(-7, 'London'), type: 'Sick Leave', status: 'Approved' },
             { id: 11, employeeId: 7, startDate: day(15), endDate: day(19), type: 'Vacation', status: 'Approved', comment: 'Ski trip' },
             { id: 12, employeeId: 17, startDate: day(40), endDate: day(130), type: 'Maternity Leave', status: 'Pending' },
             // Charlotte (the Employee demo account) has a request waiting on her lead.

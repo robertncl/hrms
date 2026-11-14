@@ -23,10 +23,6 @@ export function midnight(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-export function dayCount(request: TimeOffRequest): number {
-  return Math.round((parseDay(request.endDate) - parseDay(request.startDate)) / DAY_MS) + 1;
-}
-
 export function overlaps(a: TimeOffRequest, b: TimeOffRequest): boolean {
   return a.startDate <= b.endDate && b.startDate <= a.endDate;
 }

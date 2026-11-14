@@ -11,6 +11,9 @@ import { AuthService } from 'src/app/services/auth.service';
 import { User } from 'src/app/infrastructure/types/user';
 import { DemoRole } from 'src/app/demo/demo-data';
 import { grantRole } from 'src/testing/roles';
+import { LeaveBalanceService } from 'src/app/services/leave-balance.service';
+import { LeaveBalance } from 'src/app/shared/functions/leave';
+import { Employee } from 'src/app/infrastructure/types/employee';
 
 describe('TimeOffManagementComponent', () => {
   let component: TimeOffManagementComponent;
@@ -48,7 +51,22 @@ describe('TimeOffManagementComponent', () => {
     rejectRequest: jasmine.Spy;
     deleteRequest: jasmine.Spy;
     createRequest: jasmine.Spy;
+    refresh: jasmine.Spy;
+    error: ReturnType<typeof signal<string>>;
   };
+
+  const person = (id: number, firstName: string, position: Employee['position'], managerId?: number): Employee => ({
+    id, firstName, lastName: 'Lovelace', email: '', position, level: 'Lead', isAvailable: true, profilePicture: '',
+    location: 'London', ...(managerId ? { managerId } : {}),
+  });
+  /** Olivia (1) leads Ada (10); Sam (12) is on another team. Request 2 is from someone no longer listed. */
+  const people = [person(1, 'Olivia', 'Manager'), person(10, 'Ada', 'Developer', 1), person(12, 'Sam', 'QA')];
+  const balances: LeaveBalance[] = [
+    { employeeId: 10, year: 2026, type: 'Vacation', entitlement: 25, taken: 4, pending: 2, remaining: 19 },
+    { employeeId: 10, year: 2026, type: 'Sick Leave', entitlement: 10, taken: 0, pending: 0, remaining: 10 },
+    { employeeId: 10, year: 2026, type: 'Other', entitlement: 3, taken: 1, pending: 0, remaining: 2 },
+  ];
+  let getBalances: jasmine.Spy;
 
   beforeEach(async () => {
     requestsSignal = signal<TimeOffRequest[]>(mockRequests);
@@ -61,7 +79,10 @@ describe('TimeOffManagementComponent', () => {
       rejectRequest: jasmine.createSpy('rejectRequest'),
       deleteRequest: jasmine.createSpy('deleteRequest'),
       createRequest: jasmine.createSpy('createRequest'),
+      refresh: jasmine.createSpy('refresh'),
+      error: signal(''),
     };
+    getBalances = jasmine.createSpy('getBalances').and.returnValue(of(balances));
 
     await TestBed.configureTestingModule({
       imports: [TimeOffManagementComponent, NoopAnimationsModule],
@@ -69,12 +90,9 @@ describe('TimeOffManagementComponent', () => {
         provideRouter([]),
         {
           provide: EmployeeService,
-          useValue: {
-            getEmployees: () => of([
-              { id: 10, firstName: 'Ada', lastName: 'Lovelace', email: '', position: 'Developer', level: 'Lead', isAvailable: true, profilePicture: '' },
-            ]),
-          },
+          useValue: { getEmployees: () => of(people) },
         },
+        { provide: LeaveBalanceService, useValue: { getBalances } },
         { provide: TimeOffManagementService, useValue: mockTimeOffsService },
         { provide: AuthService, useValue: { currentUser } },
       ],
@@ -261,6 +279,159 @@ describe('TimeOffManagementComponent', () => {
       expect(fixture.nativeElement.querySelector('.page-actions')).toBeNull();
       expect(rows().length).toBe(0);
       expect(fixture.nativeElement.textContent).toContain('Who is out over the next six weeks.');
+    });
+  });
+
+  it('should start from the full, current list of requests', () => {
+    selectedTypeSignal.set('Vacation');
+    render('HR Administrator');
+
+    expect(selectedTypeSignal()).toBe('');
+    expect(mockTimeOffsService.refresh).toHaveBeenCalled();
+  });
+
+  it('should count leave in working days, skipping weekends and public holidays', () => {
+    // 1–5 Jan 2026: New Year's Day, a Friday, a weekend and a Monday.
+    expect(rows()[0].textContent).toContain('2 days');
+  });
+
+  it('should show why the API refused an action', () => {
+    mockTimeOffsService.error.set('Ada has only 1 day of vacation left.');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.alert-error').textContent).toContain('only 1 day of vacation left');
+  });
+
+  describe('leave balances', () => {
+    const strip = () =>
+      Array.from(fixture.nativeElement.querySelectorAll('.balance-strip > div') as NodeListOf<HTMLElement>)
+        .map((item) => `${item.querySelector('dt')!.textContent!.trim()}: ${item.querySelector('dd')!.textContent!.replace(/\s+/g, ' ').trim()}`);
+
+    it("should show the signed-in person's remaining days per leave type", async () => {
+      render('Employee', 10);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(getBalances).toHaveBeenCalledWith(10);
+      expect(strip()).toEqual([
+        'Vacation: 19 of 25 days left 2 waiting for approval',
+        'Sick leave: 10 of 10 days left',
+        'Personal: 2 of 3 days left',
+      ]);
+    });
+
+    it('should re-read the balances when the requests change', async () => {
+      render('Employee', 10);
+      await fixture.whenStable();
+      getBalances.calls.reset();
+
+      requestsSignal.set([...mockRequests]);
+      TestBed.tick();
+      await fixture.whenStable();
+      expect(getBalances).toHaveBeenCalledWith(10);
+    });
+
+    it('should leave the balances out for someone without a People record', async () => {
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(getBalances).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelector('.balance-card')).toBeNull();
+    });
+
+    it('should say what a request would cost before it is sent', () => {
+      component.openNewRequest();
+      // Friday to Monday: the weekend in between is free.
+      component.newRequestForm.patchValue({ employeeId: 10, type: 'Vacation', startDate: '2026-03-06', endDate: '2026-03-09' });
+      fixture.detectChanges();
+
+      const preview = fixture.nativeElement.querySelector('.leave-preview') as HTMLElement;
+      expect(preview.textContent!.replace(/\s+/g, ' ').trim()).toBe('Uses 2 working days. 21 of 25 left afterwards.');
+      expect(preview.classList).not.toContain('is-problem');
+    });
+
+    it('should say when a type of leave has no yearly limit', () => {
+      component.openNewRequest();
+      component.newRequestForm.patchValue({ employeeId: 10, type: 'Maternity Leave', startDate: '2026-03-02', endDate: '2026-03-06' });
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.leave-preview').textContent).toContain('no yearly limit');
+    });
+
+    it('should refuse a request for more days than are left', () => {
+      component.openNewRequest();
+      // Four working days of personal leave against an allowance of three.
+      component.newRequestForm.patchValue({ employeeId: 10, type: 'Other', startDate: '2026-03-02', endDate: '2026-03-05' });
+      fixture.detectChanges();
+
+      const preview = fixture.nativeElement.querySelector('.leave-preview') as HTMLElement;
+      expect(preview.textContent).toContain('This needs 4 days of personal leave in 2026, and only 3 of 3 are left.');
+      expect(preview.classList).toContain('is-problem');
+      expect((fixture.nativeElement.querySelector('dialog button[type="submit"]') as HTMLButtonElement).disabled).toBeTrue();
+
+      component.submitNewRequest();
+      expect(mockTimeOffsService.createRequest).not.toHaveBeenCalled();
+    });
+
+    it('should refuse a request that falls only on a weekend', () => {
+      component.openNewRequest();
+      component.newRequestForm.patchValue({ employeeId: 10, type: 'Vacation', startDate: '2026-03-07', endDate: '2026-03-08' });
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('.leave-preview').textContent).toContain('all weekends or public holidays');
+    });
+  });
+
+  describe('for a lead, who decides only for their own reports', () => {
+    const others: TimeOffRequest[] = [
+      { id: 3, employeeId: 12, startDate: '2026-01-12', endDate: '2026-01-13', type: 'Vacation', status: 'Pending' },
+      { id: 4, employeeId: 1, startDate: '2026-01-19', endDate: '2026-01-20', type: 'Vacation', status: 'Pending' },
+    ];
+    const bookable = () =>
+      Array.from(fixture.nativeElement.querySelectorAll('#request-employee option') as NodeListOf<HTMLOptionElement>)
+        .map((option) => option.textContent!.trim());
+
+    beforeEach(() => {
+      requestsSignal.set([...mockRequests, ...others]);
+      render('Team Lead', 1);
+    });
+
+    it("should list their reports' requests and their own, but nobody else's", () => {
+      expect(tabLabels()).toEqual(['Waiting · 2', 'Approved · 0', 'Declined · 0']);
+      expect(rows().map((row) => row.querySelector('a')!.textContent!.trim()))
+        .toEqual(['Ada Lovelace', 'Olivia Lovelace']);
+    });
+
+    it("should decide a report's request but only withdraw their own", () => {
+      expect(buttonsIn(rows()[0])).toEqual(['Decline', 'Approve']);
+      expect(buttonsIn(rows()[1])).toEqual(['Withdraw']);
+      expect(fixture.nativeElement.textContent).toContain('1 request is waiting.');
+    });
+
+    it('should bulk-approve only the requests they decide', () => {
+      const bulk = Array.from(
+        fixture.nativeElement.querySelectorAll('.tabs button') as NodeListOf<HTMLButtonElement>,
+      ).find((b) => b.textContent!.includes('with no clashes'))!;
+      expect(bulk.textContent).toContain('Approve 1 with no clashes');
+
+      bulk.click();
+      expect(mockTimeOffsService.approveRequest.calls.allArgs()).toEqual([[mockRequests[0]]]);
+    });
+
+    it('should book only for themselves and their reports', () => {
+      component.openNewRequest();
+      fixture.detectChanges();
+
+      expect(bookable()).toEqual(['Choose a person', 'Olivia Lovelace', 'Ada Lovelace']);
+      expect(fixture.nativeElement.textContent).toContain('for yourself and for the people who report to you');
+    });
+
+    it('should let HR book for anyone', () => {
+      render('HR Administrator');
+      component.openNewRequest();
+      fixture.detectChanges();
+
+      expect(bookable()).toEqual(['Choose a person', 'Olivia Lovelace', 'Ada Lovelace', 'Sam Lovelace']);
     });
   });
 });

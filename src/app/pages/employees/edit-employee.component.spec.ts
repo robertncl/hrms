@@ -1,13 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { EmployeeService } from 'src/app/services/employee.service';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { EditEmployeeComponent } from './edit-employee.component';
 import { Employee } from 'src/app/infrastructure/types/employee';
 import { PermissionsService } from 'src/app/services/permissions.service';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { IMAGE_LOADER } from '@angular/common';
 import { imageLoader } from 'src/app/app.config';
+import { signal } from '@angular/core';
+import { AuthService } from 'src/app/services/auth.service';
+import { User } from 'src/app/infrastructure/types/user';
 
 describe('EditEmployeeComponent', () => {
   let component: EditEmployeeComponent;
@@ -33,8 +37,11 @@ describe('EditEmployeeComponent', () => {
   };
 
   let canEditPrivate = true;
+  const orgWide = signal(true);
+  const currentUser = signal<User | null>(null);
   const mockPermissionsService = {
-    hasPermission: () => of(canEditPrivate)
+    hasPermission: () => of(canEditPrivate),
+    can: () => orgWide,
   };
   const mockEmployeeService = {
     updateEmployee: jasmine.createSpy('updateEmployee').and.returnValue(of(mockEmployee)),
@@ -62,6 +69,7 @@ describe('EditEmployeeComponent', () => {
           provide: PermissionsService,
           useValue: mockPermissionsService
         },
+        { provide: AuthService, useValue: { currentUser } },
         {
           provide: IMAGE_LOADER,
           useValue: imageLoader
@@ -72,6 +80,9 @@ describe('EditEmployeeComponent', () => {
 
     navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     mockEmployeeService.updateEmployee.calls.reset();
+    mockEmployeeService.updateEmployee.and.returnValue(of(mockEmployee));
+    orgWide.set(true);
+    currentUser.set(null);
     fixture = TestBed.createComponent(EditEmployeeComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -153,5 +164,42 @@ describe('EditEmployeeComponent', () => {
     spyOn(component, 'submit');
     (fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement).click();
     expect(component.submit).toHaveBeenCalled();
+  });
+
+  describe('for a lead, who edits only their own reports', () => {
+    const saveButton = () => fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+    function renderAsLead(employeeId: number) {
+      orgWide.set(false);
+      currentUser.set({ name: 'Lead', email: '', role: 'Team Lead', employeeId });
+      fixture = TestBed.createComponent(EditEmployeeComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+    }
+
+    it('should let them save changes for someone who reports to them', () => {
+      renderAsLead(2);
+      expect(component.outOfScope()).toBeFalse();
+      expect(saveButton().disabled).toBeFalse();
+    });
+
+    it('should explain and block saving for someone outside their team', () => {
+      renderAsLead(7);
+      expect(component.outOfScope()).toBeTrue();
+      expect(fixture.nativeElement.querySelector('.alert-error').textContent)
+        .toContain("John doesn't report to you");
+      expect(saveButton().disabled).toBeTrue();
+    });
+  });
+
+  it('should show why the API refused a change', () => {
+    mockEmployeeService.updateEmployee.and.returnValue(throwError(() => new HttpErrorResponse({
+      status: 403, error: { message: 'You can only do this for people who report to you.' },
+    })));
+    component.submit();
+    fixture.detectChanges();
+
+    expect(component.error()).toBe('You can only do this for people who report to you.');
+    expect(navigateSpy).not.toHaveBeenCalled();
   });
 });

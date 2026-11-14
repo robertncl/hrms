@@ -244,6 +244,7 @@ export class ShellComponent {
   private readonly canApprove = this.permissions.can('ApproveTimeOff');
   private readonly canHire = this.permissions.can('ManageHiring');
   private readonly canAssign = this.permissions.can('AssignTraining');
+  private readonly orgWide = this.permissions.can('OrgWideAccess');
 
   /** Destinations this role can use; the rest are hidden, not greyed out. */
   navItems = computed(() =>
@@ -293,6 +294,7 @@ export class ShellComponent {
             canHire: this.canHire(),
             canAssign: this.canAssign(),
             employeeId: this.user()?.employeeId,
+            orgWide: this.orgWide(),
           },
         ).length
       : 0;

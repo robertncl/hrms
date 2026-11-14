@@ -20,9 +20,10 @@ const employee = (id: number, firstName: string, lastName: string, position: Emp
   id, firstName, lastName, email: '', position, level: 'Senior', isAvailable: true, profilePicture: '',
 });
 
+/** Grace reports to Ada; Alan is on another team. */
 export const testEmployees: Employee[] = [
   employee(1, 'Ada', 'Lovelace', 'Developer'),
-  employee(2, 'Grace', 'Hopper', 'Developer'),
+  { ...employee(2, 'Grace', 'Hopper', 'Developer'), managerId: 1 },
   employee(3, 'Alan', 'Turing', 'QA'),
 ];
 
@@ -73,17 +74,20 @@ export function createLearningMocks() {
 export type LearningMocks = ReturnType<typeof createLearningMocks>;
 
 /**
- * `canAssign` and `employeeId` describe the viewer: assigners see and manage
- * everyone's training; learners see only their own (`employeeId`).
+ * `canAssign`, `employeeId` and `orgWide` describe the viewer: assigners see
+ * and manage everyone's training, or only their reports' when `orgWide` is
+ * false; learners see only their own (`employeeId`).
  */
 export function provideLearningTesting(
   mocks: LearningMocks,
   canManage = true,
   canAssign = true,
   employeeId?: number,
+  /** False for a team lead: they assign, but only within their own reporting line. */
+  orgWide = canAssign,
 ): (Provider | EnvironmentProviders)[] {
   const permissions = new PermissionsService();
-  permissions.setPermissions({ ManageCourses: canManage, AssignTraining: canAssign });
+  permissions.setPermissions({ ManageCourses: canManage, AssignTraining: canAssign, OrgWideAccess: orgWide });
   const currentUser = signal(employeeId ? { name: 'Test Learner', email: '', role: 'Employee', employeeId } : null);
   return [
     { provide: AuthService, useValue: { currentUser } },

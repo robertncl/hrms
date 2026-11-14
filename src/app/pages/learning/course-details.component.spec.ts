@@ -10,9 +10,9 @@ describe('CourseDetailsComponent', () => {
   let mocks: LearningMocks;
   let navigateSpy: jasmine.Spy;
 
-  const render = async (courseId = 1, canManage = true, canAssign = true, employeeId?: number) => {
+  const render = async (courseId = 1, canManage = true, canAssign = true, employeeId?: number, orgWide = canAssign) => {
     mocks = createLearningMocks();
-    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage, canAssign, employeeId) });
+    TestBed.configureTestingModule({ providers: provideLearningTesting(mocks, canManage, canAssign, employeeId, orgWide) });
     navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     fixture = TestBed.createComponent(CourseDetailsComponent);
     component = fixture.componentInstance;
@@ -147,6 +147,32 @@ describe('CourseDetailsComponent', () => {
     it('should say so when they are not enrolled', async () => {
       await render(1, false, false, 99);
       expect(el().textContent).toContain("You aren't enrolled in this course.");
+    });
+  });
+
+  describe('for a lead, who assigns only within their own team', () => {
+    // Ada (1) leads Grace (2); Alan (3) is on another team.
+    const asLead = (courseId: number, employeeId = 1) => render(courseId, false, true, employeeId, false);
+
+    it("should list their reports' training and their own, but not another team's", async () => {
+      await asLead(1);
+      expect(rows().map((r) => r.querySelector('.person a')!.textContent!.trim())).toEqual(['Grace Hopper', 'Ada Lovelace']);
+    });
+
+    it('should unenroll a report but not themselves', async () => {
+      await asLead(1);
+      expect(button(rows()[0], 'Unenroll')).toBeTruthy();
+      expect(button(rows()[1], 'Unenroll')).toBeUndefined();
+    });
+
+    it('should offer only their reports when assigning', async () => {
+      await asLead(3);
+      expect(component.assignable().map((e) => e.firstName)).toEqual(['Grace']);
+    });
+
+    it('should have nobody to assign to without any reports', async () => {
+      await asLead(3, 3);
+      expect(component.assignable()).toEqual([]);
     });
   });
 });

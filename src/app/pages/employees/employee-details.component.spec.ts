@@ -20,6 +20,8 @@ import { TimeOffRequest } from 'src/app/infrastructure/types/time-off-request.ty
 import { DemoRole } from 'src/app/demo/demo-data';
 import { grantRole } from 'src/testing/roles';
 import { formatLongDate } from 'src/app/shared/functions/tenure';
+import { LeaveBalanceService } from 'src/app/services/leave-balance.service';
+import { LeaveBalance } from 'src/app/shared/functions/leave';
 
 describe('EmployeeDetailsComponent', () => {
   let component: EmployeeDetailsComponent;
@@ -39,7 +41,15 @@ describe('EmployeeDetailsComponent', () => {
     managerId: 5,
     phone: '+44 20 7946 0101',
     personalEmail: 'john@example.com',
+    department: 'Engineering',
+    jobTitle: 'Staff Engineer',
   };
+  const balances: LeaveBalance[] = [
+    { employeeId: 1, year: 2026, type: 'Vacation', entitlement: 25, taken: 5, pending: 3, remaining: 17 },
+    { employeeId: 1, year: 2026, type: 'Sick Leave', entitlement: 10, taken: 0, pending: 0, remaining: 10 },
+    { employeeId: 1, year: 2026, type: 'Other', entitlement: 3, taken: 3, pending: 0, remaining: 0 },
+  ];
+  const getBalances = jasmine.createSpy('getBalances').and.returnValue(of(balances));
   const manager: Employee = {
     ...mockEmployee, id: 5, firstName: 'Olivia', lastName: 'Bennett', position: 'Manager', level: 'Lead', managerId: undefined,
   };
@@ -75,6 +85,7 @@ describe('EmployeeDetailsComponent', () => {
     mockProjectService.getProjectsByEmployeeId.and.returnValue(of(mockProjects));
     mockEnrollmentService.getEnrollmentsByEmployee.calls.reset();
     mockEnrollmentService.getEnrollmentsByEmployee.and.returnValue(of(enrollments));
+    getBalances.calls.reset();
 
     await TestBed.configureTestingModule({
       imports: [EmployeeDetailsComponent, NoopAnimationsModule],
@@ -85,6 +96,7 @@ describe('EmployeeDetailsComponent', () => {
         { provide: TimeOffRequestService, useValue: { getRequests: () => of(requests) } },
         { provide: AuthService, useValue: { currentUser } },
         { provide: EnrollmentService, useValue: mockEnrollmentService },
+        { provide: LeaveBalanceService, useValue: { getBalances } },
         {
           provide: CourseService,
           useValue: { getCourses: () => of([course(1, 'Security'), course(2, 'Privacy')]) },
@@ -224,6 +236,78 @@ describe('EmployeeDetailsComponent', () => {
       render('Employee', 1);
       expect(el().querySelector('.callout')).toBeNull();
       expect(el().textContent).toContain('Waiting for approval');
+    });
+  });
+
+  describe('org structure', () => {
+    it('should lead with the job title and link the department to its people', () => {
+      const meta = el().querySelector('h1')!.parentElement!;
+      expect(meta.textContent).toContain('Staff Engineer');
+      const link = el().querySelector('a[href="/employees?department=Engineering"]')!;
+      expect(link.textContent!.trim()).toBe('Engineering');
+      expect(detail('Job title')).toBe('Staff Engineer');
+      expect(detail('Department')).toBe('Engineering');
+    });
+
+    it('should fall back to level and role for someone without a job title', () => {
+      render('HR Administrator', undefined, { ...mockEmployee, jobTitle: undefined, department: undefined });
+      expect(el().textContent).toContain('Senior developer');
+      expect(detail('Job title')).toBe('—');
+      expect(el().querySelector('a[href^="/employees?department"]')).toBeNull();
+    });
+  });
+
+  describe('leave balances', () => {
+    const shown = () =>
+      Array.from(el().querySelectorAll('.balances > div')).map((row) =>
+        `${row.querySelector('dt')!.textContent!.trim()}: ${row.querySelector('dd')!.textContent!.replace(/\s+/g, ' ').trim()}`);
+
+    it('should show HR what the person has left per leave type', () => {
+      expect(getBalances).toHaveBeenCalledWith(1);
+      expect(shown()).toEqual([
+        'Vacation: 17 of 25 days left · 3 waiting',
+        'Sick leave: 10 of 10 days left',
+        'Personal: 0 of 3 days left',
+      ]);
+    });
+
+    it('should show people their own balances and a lead those of their reports', () => {
+      render('Employee', 1);
+      expect(shown().length).toBe(3);
+
+      render('Team Lead', 5);
+      expect(shown().length).toBe(3);
+    });
+
+    it("should not ask for a colleague's balances", () => {
+      getBalances.calls.reset();
+      render('Employee', 7);
+      expect(getBalances).not.toHaveBeenCalled();
+      expect(el().querySelector('.balances')).toBeNull();
+    });
+
+    it('should count time off in working days where the person works', () => {
+      // Fri 2 – Mon 5 Oct 2026 in Lisbon: a weekend, and Republic Day on the Monday.
+      requests = [{ id: 3, employeeId: 1, startDate: '2026-10-02', endDate: '2026-10-05', type: 'Vacation', status: 'Approved' }];
+      render('HR Administrator');
+      expect(el().querySelector('.time-rows')!.textContent).toContain('1 day');
+    });
+  });
+
+  describe('for a lead looking at someone outside their team', () => {
+    const pending: TimeOffRequest = {
+      id: 9, employeeId: 1, startDate: '2099-01-02', endDate: '2099-01-03', type: 'Vacation', status: 'Pending',
+    };
+
+    it('should offer neither Edit nor a decision, and no balances', () => {
+      requests = [pending];
+      getBalances.calls.reset();
+      // Ann (7) reports to John, not the other way round.
+      render('Team Lead', 7);
+
+      expect(el().querySelector('a[href="/employees/edit/1"]')).toBeNull();
+      expect(el().querySelector('.callout')).toBeNull();
+      expect(getBalances).not.toHaveBeenCalled();
     });
   });
 });

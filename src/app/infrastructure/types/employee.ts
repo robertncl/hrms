@@ -7,6 +7,8 @@ export type Employee = {
     level: 'Junior' | 'Middle' | 'Senior' | 'Lead';
     isAvailable: boolean;
     profilePicture: string;
+    department?: Department;
+    jobTitle?: string;
     /** ISO date they joined. */
     startDate?: string;
     location?: string;
@@ -25,5 +27,8 @@ export const PRIVATE_EMPLOYEE_FIELDS = ['firstName', 'lastName', 'email', 'phone
  * themselves get them from the API. Name and work email stay in the directory.
  */
 export const CONFIDENTIAL_EMPLOYEE_FIELDS = ['phone', 'personalEmail'] as const;
+
+export const DEPARTMENTS = ['Engineering', 'Design', 'Quality', 'Delivery'] as const;
+export type Department = (typeof DEPARTMENTS)[number];
 
 export const LOCATIONS = ['London', 'Lisbon', 'Berlin', 'Remote'] as const;
