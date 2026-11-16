@@ -1,6 +1,6 @@
 /* ==========================================================================
-   ACME Corp Design Language — tokens + base + components  (v5.0.0)
-   Vendored from the "ACME Design System" project (version 1794139292-3cb7):
+   ACME Corp Design Language — tokens + base + components  (v5.1.0)
+   Vendored from the "ACME Design System" project (version 1794744772-49c4):
    project/tokens.css (compiled from tokens.json) followed by
    project/components/bundle.css. Light theme only: Graphite builds every
    surface, ink fills the one primary action, Blue interacts, Green / Amber /
@@ -228,6 +228,19 @@ code, pre {
 :is(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--acme-color-focus);
   outline-offset: 2px;
+}
+
+/* Visually hidden but announced: table captions, icon-button labels. */
+.acme-visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
