@@ -8,6 +8,7 @@ import { AuthService } from '../services/auth.service';
 import { CandidateService } from '../services/candidate.service';
 import { CourseService } from '../services/course.service';
 import { EnrollmentService } from '../services/enrollment.service';
+import { CompensationService } from '../services/compensation.service';
 import { EmployeeService } from '../services/employee.service';
 import { NotificationService } from '../services/notification.service';
 import { TimeOffRequestService } from '../services/time-off-request.service';
@@ -33,7 +34,7 @@ type NavItem = {
  */
 const NAV_ITEMS: NavItem[] = [
   { label: 'Home', link: '/dashboard', match: ['/dashboard'] },
-  { label: 'People', link: '/employees', match: ['/employees', '/work/projects'] },
+  { label: 'People', link: '/employees', match: ['/employees', '/work/projects', '/compensation'] },
   { label: 'Time off', link: '/work/time-off', match: ['/work/time-off'] },
   { label: 'Hiring', link: '/recruitment', match: ['/recruitment'], permission: 'ManageHiring' },
   { label: 'Learning', link: '/learning', match: ['/learning'] },
@@ -245,6 +246,8 @@ export class ShellComponent {
   private readonly canHire = this.permissions.can('ManageHiring');
   private readonly canAssign = this.permissions.can('AssignTraining');
   private readonly orgWide = this.permissions.can('OrgWideAccess');
+  private readonly canDecidePay = this.permissions.can('ManageCompensation');
+  private readonly compensationService = inject(CompensationService);
 
   /** Destinations this role can use; the rest are hidden, not greyed out. */
   navItems = computed(() =>
@@ -273,6 +276,8 @@ export class ShellComponent {
       candidates: this.canHire() ? this.candidateService.getCandidates() : of([]),
       enrollments: this.enrollmentService.getEnrollments(),
       courses: this.courseService.getCourses(),
+      // Only HR decides pay, so only HR needs the proposals.
+      salaryChanges: this.canDecidePay() ? this.compensationService.getSalaryChanges() : of([]),
     }),
   );
 
@@ -289,12 +294,14 @@ export class ShellComponent {
           data.employees,
           data.enrollments,
           data.courses,
+          data.salaryChanges,
           {
             canApprove: this.canApprove(),
             canHire: this.canHire(),
             canAssign: this.canAssign(),
             employeeId: this.user()?.employeeId,
             orgWide: this.orgWide(),
+            canDecidePay: this.canDecidePay(),
           },
         ).length
       : 0;

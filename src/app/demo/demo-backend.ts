@@ -14,6 +14,9 @@ import { Permissions } from '../infrastructure/types/permissions';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { inScope, scopeOf } from '../shared/functions/org';
 import { leaveBalances, leaveProblem, workingDays } from '../shared/functions/leave';
+import { PAY_CHANGE_STATUSES, PAY_CURRENCIES, PayBand, SalaryChange } from '../infrastructure/types/compensation';
+import { bandProblem, salaryChangeProblem } from '../shared/functions/pay';
+import { grantProblem, sharePriceProblem } from '../shared/functions/equity';
 import {
     DEMO_ACCOUNTS,
     DEMO_DOMAIN,
@@ -32,7 +35,13 @@ type Collection = Exclude<keyof DemoDatabase, 'users'>;
 type Row = { id: number } & Record<string, unknown>;
 type Result = { status: number; body: unknown };
 
-const COLLECTIONS: Collection[] = ['employees', 'projects', 'candidates', 'time-off-requests', 'courses', 'enrollments'];
+const COLLECTIONS: Collection[] = [
+    'employees', 'projects', 'candidates', 'time-off-requests', 'courses', 'enrollments',
+    'pay-bands', 'salary-changes', 'stock-grants', 'share-prices',
+];
+
+/** Collections of one person's pay: each row is seen only by them and whoever may see their pay. */
+const PAY_RECORDS: Collection[] = ['salary-changes', 'stock-grants'];
 
 /** New hires get every mandatory course, due this many days after they start. */
 const MANDATORY_COURSE_DUE_DAYS = 30;
@@ -52,6 +61,8 @@ const ACTIONS: Record<Permissions, string> = {
     AssignTraining: 'assign training',
     ManageCourses: 'change the course catalog',
     OrgWideAccess: 'act outside your own team',
+    ViewCompensation: "see or propose other people's pay",
+    ManageCompensation: 'change pay or equity',
 };
 const forbidden = (permission: Permissions): Result => fail(403, `Your role can't ${ACTIONS[permission]}.`);
 const outsideTeam = (): Result => fail(403, 'You can only do this for people who report to you.');
@@ -241,7 +252,32 @@ export class DemoBackend {
             }
             case 'projects':
                 return null;
+            case 'pay-bands':
+            case 'share-prices':
+                // Bands and the share price are open to everyone: pay transparency.
+                return method === 'GET' ? null : need('ManageCompensation');
+            case 'salary-changes': {
+                // Reads are filtered row by row (see seesPay).
+                if (method === 'GET') return null;
+                if (permissions.ManageCompensation) return covered();
+                // A lead proposes changes for their reports, and can withdraw a
+                // proposal while it is still waiting. HR decides.
+                const proposing = method === 'POST';
+                const withdrawing = method === 'DELETE' && row?.['status'] === 'Pending';
+                if (proposing || withdrawing) return need('ViewCompensation') ?? covered();
+                return forbidden('ManageCompensation');
+            }
+            case 'stock-grants':
+                return method === 'GET' ? null : need('ManageCompensation') ?? covered();
         }
+    }
+
+    /** Whether `account` may see `employeeId`'s pay and equity: their own, or anyone in scope with ViewCompensation. */
+    private seesPay(account: DemoAccount, employeeId: unknown): boolean {
+        if (account.employeeId !== undefined && employeeId === account.employeeId) return true;
+        const permissions = permissionsFor(account.role);
+        return (permissions.ViewCompensation || permissions.ManageCompensation)
+            && typeof employeeId === 'number' && inScope(this.scope(account), employeeId);
     }
 
     private scope(account: DemoAccount): Set<number> | null {
@@ -315,19 +351,26 @@ export class DemoBackend {
             switch (req.method) {
                 case 'GET':
                     // Filter what the caller may see, so a filter can't probe hidden fields.
-                    return ok(rows.map(row => this.view(collection, row, account)).filter(row => matches(row as Row, query)));
+                    return ok(rows
+                        .filter(row => !PAY_RECORDS.includes(collection) || this.seesPay(account, row['employeeId']))
+                        .map(row => this.view(collection, row, account))
+                        .filter(row => matches(row as Row, query)));
                 case 'POST': {
-                    const rejection = this.validateCreate(collection, body);
-                    if (rejection) {
-                        return rejection;
-                    }
                     const created = {
                         ...defaultsFor(collection),
                         ...body,
                         // Booking and deciding are separate steps: nobody books leave already approved.
                         ...(collection === 'time-off-requests' ? { status: 'Pending' } : {}),
+                        ...(collection === 'salary-changes' ? this.newSalaryChangeStamp(account) : {}),
                         id: nextId(rows),
                     } as Row;
+                    for (const key of Object.keys(created)) {
+                        if (created[key] === undefined) delete created[key];
+                    }
+                    const rejection = this.validateCreate(collection, body) ?? this.validatePay(collection, created);
+                    if (rejection) {
+                        return rejection;
+                    }
                     rows.push(this.normalize(collection, created));
                     if (collection === 'employees') {
                         this.enrollInMandatoryCourses(created.id);
@@ -339,7 +382,8 @@ export class DemoBackend {
             }
         }
 
-        if (index === -1) {
+        // Someone else's pay is as good as missing: don't confirm it exists.
+        if (index === -1 || (PAY_RECORDS.includes(collection) && !this.seesPay(account, rows[index]['employeeId']))) {
             return fail(404, `No ${collection} record with id ${idSegment}`);
         }
 
@@ -357,7 +401,11 @@ export class DemoBackend {
                 const checkBalance = collection === 'time-off-requests' && next['status'] === 'Approved'
                     && (before['status'] !== 'Approved'
                         || LEAVE_COST_FIELDS.some(field => next[field] !== before[field]));
-                const refused = checkBalance ? this.leaveRefusal(next as unknown as TimeOffRequest, true) : null;
+                if (collection === 'salary-changes') {
+                    this.stampDecision(before, next, account);
+                }
+                const refused = (checkBalance ? this.leaveRefusal(next as unknown as TimeOffRequest, true) : null)
+                    ?? this.validatePay(collection, next, before);
                 if (refused) {
                     return refused;
                 }
@@ -404,6 +452,72 @@ export class DemoBackend {
                 : enrollment.completedModules >= total ? 'Completed' : 'In progress';
         }
         return copy;
+    }
+
+    /** Who asked for a salary change: HR's are recorded as decided, a lead's wait for HR. */
+    private newSalaryChangeStamp(account: DemoAccount): Partial<SalaryChange> {
+        const today = daysFromToday(0);
+        const decided = permissionsFor(account.role).ManageCompensation;
+        // Whatever the client sent, the API says who asked and who decided.
+        return {
+            status: decided ? 'Approved' : 'Pending',
+            proposedBy: account.name,
+            proposedAt: today,
+            decidedBy: decided ? account.name : undefined,
+            decidedAt: decided ? today : undefined,
+        };
+    }
+
+    /** Keeps who proposed a change, and records who decided it when its status moves. */
+    private stampDecision(before: Row, next: Row, account: DemoAccount) {
+        next['proposedBy'] = before['proposedBy'];
+        next['proposedAt'] = before['proposedAt'];
+        if (next['status'] !== before['status']) {
+            next['decidedBy'] = account.name;
+            next['decidedAt'] = daysFromToday(0);
+        } else {
+            next['decidedBy'] = before['decidedBy'];
+            next['decidedAt'] = before['decidedAt'];
+        }
+        for (const key of ['decidedBy', 'decidedAt', 'proposedBy', 'proposedAt']) {
+            if (next[key] === undefined) delete next[key];
+        }
+    }
+
+    /** Checks a pay record as it would be saved. `before` is set for updates. */
+    private validatePay(collection: Collection, row: Row, before?: Row): Result | null {
+        const person = (id: unknown) => this.db.employees.some(e => e.id === id);
+        switch (collection) {
+            case 'salary-changes': {
+                if (!person(row['employeeId'])) return fail(400, 'Unknown employee');
+                if (!PAY_CHANGE_STATUSES.includes(row['status'] as SalaryChange['status'])) return fail(400, 'Unknown status');
+                const problem = salaryChangeProblem(row);
+                return problem ? fail(422, problem) : null;
+            }
+            case 'stock-grants': {
+                if (!person(row['employeeId'])) return fail(400, 'Unknown employee');
+                const problem = grantProblem(row, daysFromToday(0));
+                return problem ? fail(422, problem) : null;
+            }
+            case 'share-prices': {
+                const problem = sharePriceProblem(row);
+                return problem ? fail(422, problem) : null;
+            }
+            case 'pay-bands': {
+                const band = row as unknown as PayBand;
+                const known = ['Developer', 'Designer', 'QA', 'Manager'].includes(band.position)
+                    && ['Junior', 'Middle', 'Senior', 'Lead'].includes(band.level)
+                    && PAY_CURRENCIES.includes(band.currency);
+                if (!known) return fail(400, 'A band needs a known role, level and currency.');
+                const clash = this.db['pay-bands'].some(b => b.id !== band.id
+                    && b.position === band.position && b.level === band.level && b.currency === band.currency);
+                if (clash) return fail(409, `There is already a ${band.currency} band for ${band.level} ${band.position}.`);
+                const problem = bandProblem(band);
+                return problem ? fail(422, problem) : null;
+            }
+            default:
+                return null;
+        }
     }
 
     private validateCreate(collection: Collection, body: Record<string, unknown>): Result | null {
@@ -460,6 +574,8 @@ export class DemoBackend {
     private removeEmployeeReferences(employeeId: number) {
         this.db.enrollments = this.db.enrollments.filter(e => e.employeeId !== employeeId);
         this.db['time-off-requests'] = this.db['time-off-requests'].filter(r => r.employeeId !== employeeId);
+        this.db['salary-changes'] = this.db['salary-changes'].filter(c => c.employeeId !== employeeId);
+        this.db['stock-grants'] = this.db['stock-grants'].filter(g => g.employeeId !== employeeId);
         for (const project of this.db.projects) {
             project.employees = project.employees.filter(id => id !== employeeId);
         }
@@ -510,6 +626,15 @@ function matches(row: Row, query: URLSearchParams): boolean {
 function migrate(stored: Partial<DemoDatabase>): DemoDatabase {
     const seed = createDemoDatabase();
     const db = { ...seed, ...stored } as DemoDatabase;
+    // Pay arrived later: seed it for the people who are still there.
+    if (!Array.isArray(stored['salary-changes']) || !Array.isArray(stored['stock-grants'])
+        || !Array.isArray(stored['pay-bands']) || !Array.isArray(stored['share-prices'])) {
+        const employeeIds = new Set(db.employees.map(e => e.id));
+        db['pay-bands'] = seed['pay-bands'];
+        db['share-prices'] = seed['share-prices'];
+        db['salary-changes'] = seed['salary-changes'].filter(c => employeeIds.has(c.employeeId));
+        db['stock-grants'] = seed['stock-grants'].filter(g => employeeIds.has(g.employeeId));
+    }
     if (!Array.isArray(stored.courses) || !Array.isArray(stored.enrollments)) {
         const employeeIds = new Set(db.employees.map(e => e.id));
         db.courses = seed.courses;
@@ -564,6 +689,12 @@ function defaultsFor(collection: Collection): Record<string, unknown> {
             return { mandatory: false, modules: [], description: '' };
         case 'enrollments':
             return { completedModules: 0, assignedAt: daysFromToday(0) };
+        case 'stock-grants':
+            return { exercisedShares: 0 };
+        case 'salary-changes':
+        case 'pay-bands':
+        case 'share-prices':
+            return {};
     }
 }
 

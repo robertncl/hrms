@@ -50,6 +50,12 @@ export const routes: Routes = [
         },
       },
       {
+        path: 'compensation',
+        loadChildren: () => {
+          return import('./pages/compensation/compensation.routes').then((m) => m.routes);
+        },
+      },
+      {
         path: 'work',
         loadChildren: () => {
           return import('./pages/work/work.routes').then((m) => m.routes);

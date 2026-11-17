@@ -13,7 +13,15 @@ export type Permissions =
    * editing people and assigning training cover only the people who report
    * to you, directly or through their managers.
    */
-  | 'OrgWideAccess';
+  | 'OrgWideAccess'
+  /**
+   * See other people's pay and equity, and propose salary changes for HR to
+   * decide. Within your reporting line unless you also have OrgWideAccess.
+   * Everyone always sees their own.
+   */
+  | 'ViewCompensation'
+  /** Record and approve salary changes, grant equity, and set pay bands and the share price. */
+  | 'ManageCompensation';
 
 export const ALL_PERMISSION_NAMES: Permissions[] = [
   'ViewEmployees',
@@ -26,4 +34,6 @@ export const ALL_PERMISSION_NAMES: Permissions[] = [
   'ManageHiring',
   'AssignTraining',
   'OrgWideAccess',
+  'ViewCompensation',
+  'ManageCompensation',
 ];

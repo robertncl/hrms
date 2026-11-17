@@ -17,6 +17,8 @@ import { Course, Enrollment } from '../infrastructure/types/course';
 import { DemoRole, daysFromToday } from '../demo/demo-data';
 import { User } from '../infrastructure/types/user';
 import { grantRole } from 'src/testing/roles';
+import { CompensationService } from '../services/compensation.service';
+import { SalaryChange } from '../infrastructure/types/compensation';
 
 describe('DashboardComponent', () => {
   let fixture: ComponentFixture<DashboardComponent>;
@@ -63,6 +65,9 @@ describe('DashboardComponent', () => {
   ];
 
   const text = () => fixture.nativeElement.textContent as string;
+  /** Empty unless a test needs pay proposals. */
+  let salaryChanges: SalaryChange[] = [];
+  let getSalaryChanges: jasmine.Spy;
 
   beforeEach(async () => {
     // The fixtures assume a Friday: the pending request (3–4 days out) lands on
@@ -72,6 +77,8 @@ describe('DashboardComponent', () => {
     jasmine.clock().mockDate(new Date(2026, 9, 16, 12, 0, 0));
     requests = buildRequests();
     enrollments = buildEnrollments();
+    salaryChanges = [];
+    getSalaryChanges = jasmine.createSpy('getSalaryChanges').and.callFake(() => of(salaryChanges));
     mockCandidateService = { getCandidates: jasmine.createSpy('getCandidates').and.returnValue(of(candidates)) };
     mockTimeOffRequestService = {
       getRequests: jasmine.createSpy('getRequests').and.returnValue(of(requests)),
@@ -90,6 +97,7 @@ describe('DashboardComponent', () => {
         { provide: CourseService, useValue: { getCourses: () => of(courses) } },
         { provide: EnrollmentService, useValue: { getEnrollments: () => of(enrollments) } },
         { provide: AuthService, useValue: { currentUser } },
+        { provide: CompensationService, useValue: { getSalaryChanges: (...args: unknown[]) => getSalaryChanges(...args) } },
       ],
     }).compileComponents();
 
@@ -143,7 +151,7 @@ describe('DashboardComponent', () => {
   });
 
   it('should split the queue by kind with counted tabs', () => {
-    expect(tabLabels()).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1']);
+    expect(tabLabels()).toEqual(['All 2', 'Time off 1', 'Hiring 0', 'Training 1', 'Pay 0']);
     expect(tabs()[0].getAttribute('aria-selected')).toBe('true');
 
     tabs()[3].click();
@@ -162,7 +170,7 @@ describe('DashboardComponent', () => {
 
     tabs()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End' }));
     fixture.detectChanges();
-    expect(tabs()[3].getAttribute('aria-selected')).toBe('true');
+    expect(tabs()[4].getAttribute('aria-selected')).toBe('true');
   });
 
   it('should say who is out today and why', () => {
@@ -280,5 +288,46 @@ describe('DashboardComponent', () => {
 
     expect(text()).toContain('only 1 of 25 are left');
     expect(fixture.nativeElement.querySelector('.acme-alert--success')).toBeNull();
+  });
+
+  describe('pay proposals', () => {
+    const change = (id: number, employeeId: number, baseSalary: number, status: SalaryChange['status'], effectiveDate: string): SalaryChange => ({
+      id, employeeId, baseSalary, status, effectiveDate, currency: 'GBP', reason: status === 'Pending' ? 'Market adjustment' : 'New hire',
+      ...(status === 'Pending' ? { proposedBy: 'Olivia Bennett' } : {}),
+    });
+
+    beforeEach(() => {
+      salaryChanges = [
+        change(1, 3, 50_000, 'Approved', daysFromToday(-400)),
+        change(2, 3, 53_000, 'Pending', daysFromToday(20)),
+      ];
+    });
+
+    it('should put a proposed raise in HR\'s queue, with how much it moves pay', () => {
+      render('HR Administrator');
+
+      expect(tabLabels()).toEqual(['All 3', 'Time off 1', 'Hiring 0', 'Training 1', 'Pay 1']);
+      const row = Array.from(fixture.nativeElement.querySelectorAll('.row-item') as NodeListOf<HTMLElement>)
+        .find((r) => r.textContent!.includes('Market adjustment'))!;
+      expect(row.textContent).toContain('First3 Last3');
+      expect(row.textContent).toContain('£50,000 → £53,000 (+6.0%), proposed by Olivia Bennett.');
+      expect(row.querySelector('a[href="/compensation/3"]')).not.toBeNull();
+    });
+
+    it('should flag a proposal that takes effect within a week', () => {
+      salaryChanges[1] = { ...salaryChanges[1], effectiveDate: daysFromToday(4) };
+      render('HR Administrator');
+
+      const row = Array.from(fixture.nativeElement.querySelectorAll('.row-item') as NodeListOf<HTMLElement>)
+        .find((r) => r.textContent!.includes('Market adjustment'))!;
+      expect(row.querySelector('.badge')!.textContent).toContain('Starts in 4 days');
+    });
+
+    it('should not ask anyone but HR for pay proposals', () => {
+      getSalaryChanges.calls.reset();
+      render('Team Lead', 9);
+      expect(getSalaryChanges).not.toHaveBeenCalled();
+      expect(tabLabels()).not.toContain('Pay 0');
+    });
   });
 });

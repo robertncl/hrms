@@ -10,6 +10,9 @@ import { Candidate } from '../infrastructure/types/candidate';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { Course, Enrollment } from '../infrastructure/types/course';
 import { LeaveBalance, nextWorkingDay } from '../shared/functions/leave';
+import { PayBand, SalaryChange, SharePrice, StockGrant } from '../infrastructure/types/compensation';
+import { currencyFor, currentSalary } from '../shared/functions/pay';
+import { sharePriceOn, vestedShares } from '../shared/functions/equity';
 
 describe('DemoBackend', () => {
   let http: HttpClient;
@@ -743,6 +746,225 @@ describe('DemoBackend', () => {
         expect(await message(request(http.patch(`/time-off-requests/${pending.id}`, { status: 'Approved' }))))
           .withContext(`request ${pending.id}`).toBe('allowed');
       }
+    });
+  });
+
+  describe('compensation', () => {
+    const today = daysFromToday(0);
+    const message = async (promise: Promise<unknown>) => {
+      try {
+        await promise;
+        return 'allowed';
+      } catch (error) {
+        const { status, error: body } = error as HttpErrorResponse;
+        return `${status} ${body?.message ?? ''}`.trim();
+      }
+    };
+    const changes = (query = '') => request(http.get<SalaryChange[]>(`/salary-changes${query}`));
+    const grants = (query = '') => request(http.get<StockGrant[]>(`/stock-grants${query}`));
+    const ids = (rows: { employeeId: number }[]) => [...new Set(rows.map((r) => r.employeeId))].sort((a, b) => a - b);
+    const proposal = (employeeId: number, baseSalary: number, extra: Record<string, unknown> = {}) => ({
+      employeeId, baseSalary, currency: currencyFor(seed.employees.find((e) => e.id === employeeId)?.location),
+      effectiveDate: daysFromToday(20), reason: 'Merit increase', ...extra,
+    });
+    const OUTSIDE_TEAM = '403 You can only do this for people who report to you.';
+
+    describe('seed data', () => {
+      it('should give everyone a salary today, in the currency of where they work', () => {
+        for (const person of seed.employees) {
+          const salary = currentSalary(seed['salary-changes'], person.id, today);
+          expect(salary).withContext(person.firstName).toBeDefined();
+          expect(salary!.currency).withContext(person.firstName).toBe(currencyFor(person.location));
+          expect(seed['salary-changes'].find((c) => c.employeeId === person.id)!.reason).withContext(person.firstName).toBe('New hire');
+        }
+      });
+
+      it('should have a band for every role and level in both currencies', () => {
+        expect(seed['pay-bands'].length).toBe(32);
+        expect(seed['pay-bands'].every((b) => b.max > b.min)).toBeTrue();
+      });
+
+      it('should grant options at the share price of the day, and never exercise more than vested', () => {
+        for (const grant of seed['stock-grants']) {
+          if (grant.kind === 'Stock options') {
+            expect(grant.strikePrice).toBe(sharePriceOn(seed['share-prices'], grant.grantDate)?.pricePerShare ?? 0.85);
+          }
+          expect(grant.exercisedShares).toBeLessThanOrEqual(vestedShares(grant, today));
+        }
+      });
+
+      it('should leave two raises waiting for HR and one declined', () => {
+        expect(seed['salary-changes'].filter((c) => c.status === 'Pending').map((c) => c.employeeId)).toEqual([2, 5]);
+        expect(seed['salary-changes'].filter((c) => c.status === 'Rejected').map((c) => c.employeeId)).toEqual([6]);
+      });
+    });
+
+    describe('who sees whose pay', () => {
+      it('should show HR everyone', async () => {
+        expect(ids(await changes()).length).toBe(seed.employees.length);
+        expect(ids(await grants()).length).toBe(new Set(seed['stock-grants'].map((g) => g.employeeId)).size);
+      });
+
+      it('should show a lead their reporting line, not themselves or another team', async () => {
+        await signIn('lead@acme.com');
+        // Olivia (1) leads 2, 4, 6, 8, 11, 12, 15, 16, 17, and 18 through Evelyn. Her own record is hers, so she sees it too.
+        expect(ids(await changes())).toEqual([1, 2, 4, 6, 8, 11, 12, 15, 16, 17, 18]);
+        expect(await changes('?employeeId=3')).toEqual([]);
+      });
+
+      it('should show an employee only their own', async () => {
+        await signIn('employee@acme.com');
+        expect(ids(await changes())).toEqual([15]);
+        expect(ids(await grants())).toEqual([15]);
+        expect(await changes('?employeeId=2')).toEqual([]);
+        const liams = seed['salary-changes'].find((c) => c.employeeId === 2)!;
+        expect(await message(request(http.get(`/salary-changes/${liams.id}`)))).toContain('404');
+      });
+
+      it('should show people with no People record and no pay rights nothing', async () => {
+        await signIn('recruiter@acme.com');
+        expect(await changes()).toEqual([]);
+        expect(await grants()).toEqual([]);
+      });
+
+      it('should let everyone read the bands and the share price, and only HR change them', async () => {
+        await signIn('employee@acme.com');
+        expect((await request(http.get<PayBand[]>('/pay-bands'))).length).toBe(32);
+        expect((await request(http.get<SharePrice[]>('/share-prices'))).length).toBe(5);
+        expect(await message(request(http.patch('/pay-bands/1', { max: 999_999 })))).toBe("403 Your role can't change pay or equity.");
+        await signIn('lead@acme.com');
+        expect(await message(request(http.post('/share-prices', { pricePerShare: 99, effectiveDate: today })))).toBe("403 Your role can't change pay or equity.");
+      });
+    });
+
+    describe('changing salaries', () => {
+      it("should record HR's change at once, as decided by them", async () => {
+        const saved = await request(http.post<SalaryChange>('/salary-changes', proposal(3, 80_000, { reason: 'Promotion' })));
+        expect(saved).toEqual(jasmine.objectContaining({
+          status: 'Approved', proposedBy: 'Alex Morgan', decidedBy: 'Alex Morgan', decidedAt: today,
+        }));
+      });
+
+      it("should hold a lead's proposal for HR, whatever status it asks for", async () => {
+        await signIn('lead@acme.com');
+        const proposed = await request(http.post<SalaryChange>('/salary-changes', proposal(18, 60_000, { status: 'Approved', decidedBy: 'Me' })));
+        expect(proposed.status).toBe('Pending');
+        expect(proposed.proposedBy).toBe('Olivia Bennett');
+        expect(proposed.decidedBy).toBeUndefined();
+
+        // HR approves it: who proposed it stays, who decided it is recorded.
+        await signIn('admin@acme.com');
+        const approved = await request(http.patch<SalaryChange>(`/salary-changes/${proposed.id}`, { status: 'Approved', proposedBy: 'Someone else' }));
+        expect(approved).toEqual(jasmine.objectContaining({ status: 'Approved', proposedBy: 'Olivia Bennett', decidedBy: 'Alex Morgan' }));
+      });
+
+      it('should not let a lead propose for themselves or another team, or decide anything', async () => {
+        await signIn('lead@acme.com');
+        expect(await message(request(http.post('/salary-changes', proposal(1, 200_000))))).toBe(OUTSIDE_TEAM);
+        expect(await message(request(http.post('/salary-changes', proposal(3, 90_000))))).toBe(OUTSIDE_TEAM);
+        const liams = seed['salary-changes'].find((c) => c.employeeId === 2 && c.status === 'Pending')!;
+        expect(await message(request(http.patch(`/salary-changes/${liams.id}`, { status: 'Approved' }))))
+          .toBe("403 Your role can't change pay or equity.");
+      });
+
+      it('should let a lead withdraw a waiting proposal, but not remove a decided change', async () => {
+        await signIn('lead@acme.com');
+        const liams = seed['salary-changes'].filter((c) => c.employeeId === 2);
+        const approved = liams.find((c) => c.status === 'Approved')!;
+        const pending = liams.find((c) => c.status === 'Pending')!;
+        expect(await message(request(http.delete(`/salary-changes/${approved.id}`)))).toBe("403 Your role can't change pay or equity.");
+        expect(await message(request(http.delete(`/salary-changes/${pending.id}`)))).toBe('allowed');
+      });
+
+      it('should not let an employee propose their own raise', async () => {
+        await signIn('employee@acme.com');
+        expect(await message(request(http.post('/salary-changes', proposal(15, 90_000)))))
+          .toBe("403 Your role can't see or propose other people's pay.");
+      });
+
+      it('should refuse a change that makes no sense', async () => {
+        expect(await message(request(http.post('/salary-changes', proposal(2, -5))))).toBe('422 Enter a salary above zero.');
+        expect(await message(request(http.post('/salary-changes', proposal(2, 90_000, { currency: 'JPY' })))))
+          .toBe('422 Pay is in pounds (GBP) or euros (EUR).');
+        expect(await message(request(http.post('/salary-changes', proposal(2, 90_000, { effectiveDate: '2026-13-01' })))))
+          .toBe('422 Pick the day the new salary starts.');
+        expect(await message(request(http.post('/salary-changes', proposal(999, 90_000))))).toBe('400 Unknown employee');
+        const any = seed['salary-changes'][0];
+        expect(await message(request(http.patch(`/salary-changes/${any.id}`, { status: 'Maybe' })))).toBe('400 Unknown status');
+      });
+    });
+
+    describe('equity', () => {
+      const grant = (extra: Record<string, unknown> = {}) => ({
+        employeeId: 18, kind: 'Stock options', shares: 4_000, strikePrice: 9.4, grantDate: today, vestingStart: today,
+        vestingMonths: 48, cliffMonths: 12, expirationDate: daysFromToday(3650), ...extra,
+      });
+
+      it('should let HR grant options, starting with none exercised', async () => {
+        const saved = await request(http.post<StockGrant>('/stock-grants', grant()));
+        expect(saved.exercisedShares).toBe(0);
+      });
+
+      it('should not let anyone but HR grant equity', async () => {
+        await signIn('lead@acme.com');
+        expect(await message(request(http.post('/stock-grants', grant())))).toBe("403 Your role can't change pay or equity.");
+      });
+
+      it('should record an exercise only up to what has vested', async () => {
+        // Harper joined seven months ago: nothing has vested before the one-year cliff.
+        const harpers = seed['stock-grants'].find((g) => g.employeeId === 13)!;
+        expect(await message(request(http.patch(`/stock-grants/${harpers.id}`, { exercisedShares: 1 }))))
+          .toBe('422 Only 0 of these options have vested, so no more can be exercised.');
+        const liams = seed['stock-grants'].find((g) => g.employeeId === 2)!;
+        expect(vestedShares(liams, today)).toBe(liams.shares);
+        expect(await message(request(http.patch(`/stock-grants/${liams.id}`, { exercisedShares: 2_000 })))).toBe('allowed');
+        expect(await message(request(http.patch(`/stock-grants/${liams.id}`, { exercisedShares: liams.shares + 1 }))))
+          .toBe('422 Exercised shares have to be a whole number, no more than the grant.');
+      });
+
+      it('should refuse grants that make no sense', async () => {
+        expect(await message(request(http.post('/stock-grants', grant({ cliffMonths: 60 }))))).toBe("422 The cliff can't be longer than vesting.");
+        expect(await message(request(http.post('/stock-grants', grant({ kind: 'RSUs' })))))
+          .toBe("422 RSUs don't have a strike price or an expiry date.");
+        expect(await message(request(http.post('/stock-grants', grant({ employeeId: 999 }))))).toBe('400 Unknown employee');
+      });
+    });
+
+    describe('bands and share prices', () => {
+      it('should refuse a second band for the same role, level and currency', async () => {
+        expect(await message(request(http.post('/pay-bands', { position: 'QA', level: 'Junior', currency: 'GBP', min: 1, max: 2 }))))
+          .toBe('409 There is already a GBP band for Junior QA.');
+        expect(await message(request(http.patch('/pay-bands/1', { min: 60_000, max: 50_000 }))))
+          .toBe('422 The top of the band has to be above the bottom.');
+        expect(await message(request(http.patch('/pay-bands/1', { min: 40_000, max: 55_000 })))).toBe('allowed');
+      });
+
+      it('should add a valuation', async () => {
+        expect(await message(request(http.post('/share-prices', { pricePerShare: 11.25, effectiveDate: today, note: 'Series C' })))).toBe('allowed');
+        expect(await message(request(http.post('/share-prices', { pricePerShare: 0, effectiveDate: today }))))
+          .toBe('422 Enter a price per share above zero.');
+      });
+    });
+
+    it("should remove someone's pay and equity with them", async () => {
+      await request(http.delete('/employees/2'));
+      expect(await changes('?employeeId=2')).toEqual([]);
+      expect(await grants('?employeeId=2')).toEqual([]);
+    });
+
+    it('should add pay to demo data saved before it existed, for the people still there', () => {
+      const old = createDemoDatabase() as unknown as Record<string, unknown> & { employees: Employee[] };
+      for (const key of ['pay-bands', 'salary-changes', 'stock-grants', 'share-prices']) delete old[key];
+      old.employees = old.employees.filter((e) => e.id !== 2);
+      localStorage.setItem('acme-people-db', JSON.stringify(old));
+
+      const migrated = TestBed.runInInjectionContext(() => new DemoBackend());
+      const db = (migrated as unknown as { db: typeof seed }).db;
+      expect(db['pay-bands'].length).toBe(32);
+      expect(db['share-prices'].length).toBe(5);
+      expect(db['salary-changes'].some((c) => c.employeeId === 2)).toBeFalse();
+      expect(db['salary-changes'].some((c) => c.employeeId === 3)).toBeTrue();
+      expect(db['stock-grants'].some((g) => g.employeeId === 2)).toBeFalse();
     });
   });
 });
