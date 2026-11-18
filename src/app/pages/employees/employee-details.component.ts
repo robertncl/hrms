@@ -22,6 +22,11 @@ import { LeaveBalanceService } from 'src/app/services/leave-balance.service';
 import { LeaveBalance, workingDays } from 'src/app/shared/functions/leave';
 import { PermissionsService } from 'src/app/services/permissions.service';
 import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
+import { CompensationService } from 'src/app/services/compensation.service';
+import { EQUITY_CURRENCY } from 'src/app/infrastructure/types/compensation';
+import { formatMoney } from 'src/app/shared/functions/pay';
+import { toIsoDate } from 'src/app/shared/functions/dates';
+import { PaySummary, STANDING_LABEL, paySummary } from '../compensation/compensation';
 
 @Component({
   selector: 'app-employee-details',
@@ -207,6 +212,45 @@ import { formatLongDate, tenure } from 'src/app/shared/functions/tenure';
             </section>
           }
 
+          @if (pay(); as pay) {
+            <section class="card" aria-labelledby="pay-title">
+              <div class="card-header">
+                <h2 id="pay-title">Pay and equity</h2>
+                <a class="small" [routerLink]="['/compensation', employee.id]">See all</a>
+              </div>
+              <dl class="details-list">
+                <dt>Base salary</dt>
+                <dd>
+                  @if (pay.salary; as salary) {
+                    {{ money(salary.baseSalary, salary.currency) }} a year
+                    @if (pay.standing; as standing) {
+                      <span class="badge" [class.badge-warning]="standing !== 'within'">{{ standingLabel[standing] }}</span>
+                    }
+                  } @else {
+                    —
+                  }
+                </dd>
+                <dt>Equity vested</dt>
+                <dd>
+                  @if (pay.sharesVested) {
+                    {{ money(pay.vestedValue, equityCurrency) }} · {{ pay.sharesVested.toLocaleString('en-GB') }} shares
+                  } @else if (pay.sharesGranted) {
+                    Not vested yet
+                  } @else {
+                    None
+                  }
+                </dd>
+                @if (pay.pending.length) {
+                  <dt>Proposed</dt>
+                  <dd>{{ money(pay.pending[0].baseSalary, pay.pending[0].currency) }}, waiting for HR</dd>
+                }
+              </dl>
+              <p class="small muted private-note">
+                {{ isSelf() ? 'Only you, your leads and HR see this.' : 'Only ' + employee.firstName + ', their leads and HR see this.' }}
+              </p>
+            </section>
+          }
+
           <section class="card" aria-labelledby="timeoff-title">
             <div class="card-header">
               <h2 id="timeoff-title">Time off</h2>
@@ -373,6 +417,14 @@ export class EmployeeDetailsComponent implements OnInit {
   private readonly canApprove = this.permissions.can('ApproveTimeOff');
   private readonly access = inject(AccessScope);
   private readonly leaveBalanceService = inject(LeaveBalanceService);
+  private readonly compensationService = inject(CompensationService);
+  private readonly canViewPay = this.permissions.can('ViewCompensation');
+  private payLoading?: Subscription;
+  /** This person's pay today, when the viewer may see it. */
+  pay = signal<PaySummary | null>(null);
+  readonly standingLabel = STANDING_LABEL;
+  readonly equityCurrency = EQUITY_CURRENCY;
+  readonly money = formatMoney;
   /** Editing and approving reach only the people in the viewer's scope. */
   private readonly inScope = computed(() => this.access.covers(this.colleagues(), this.employee.id));
   canEditThis = computed(() => this.canEdit() && this.inScope());
@@ -459,6 +511,26 @@ export class EmployeeDetailsComponent implements OnInit {
 
       this.loaded.set(true);
       this.loadBalances();
+      this.loadPay();
+    });
+  }
+
+  /** Pay is shown to the person, the leads above them, and HR. The API filters it the same way. */
+  private loadPay() {
+    if (!this.isSelf() && !(this.canViewPay() && this.inScope())) {
+      this.pay.set(null);
+      return;
+    }
+    const today = toIsoDate(new Date());
+    this.payLoading?.unsubscribe();
+    this.payLoading = forkJoin({
+      changes: this.compensationService.getSalaryChanges(this.employee.id),
+      bands: this.compensationService.getPayBands(),
+      grants: this.compensationService.getGrants(this.employee.id),
+      prices: this.compensationService.getSharePrices(),
+    }).subscribe({
+      next: ({ changes, bands, grants, prices }) => this.pay.set(paySummary(this.employee, changes, bands, grants, prices, today)),
+      error: () => this.pay.set(null),
     });
   }
 

@@ -13,8 +13,10 @@ import {
 } from 'src/app/shared/functions/absence';
 import { workingDays } from 'src/app/shared/functions/leave';
 import { inScope, scopeOf } from 'src/app/shared/functions/org';
+import { SalaryChange } from 'src/app/infrastructure/types/compensation';
+import { formatChange, formatMoney, percentChange, previousSalary } from 'src/app/shared/functions/pay';
 
-export type QueueKind = 'all' | 'timeoff' | 'hiring' | 'training';
+export type QueueKind = 'all' | 'timeoff' | 'hiring' | 'training' | 'pay';
 
 /** Who the queue is for: it lists only what they can act on. */
 export type QueueViewer = {
@@ -29,6 +31,8 @@ export type QueueViewer = {
    * true.
    */
   orgWide?: boolean;
+  /** HR: decides salary changes others have proposed. */
+  canDecidePay?: boolean;
 };
 
 export const EVERYTHING: QueueViewer = { canApprove: true, canHire: true, canAssign: true };
@@ -36,7 +40,7 @@ export const EVERYTHING: QueueViewer = { canApprove: true, canHire: true, canAss
 /** One thing waiting on the signed-in user, from either side of the app. */
 export type QueueItem = {
   id: string;
-  kind: 'timeoff' | 'hiring' | 'training';
+  kind: 'timeoff' | 'hiring' | 'training' | 'pay';
   name: string;
   what: string;
   note: string;
@@ -184,6 +188,38 @@ function trainingItems(
     }));
 }
 
+function payItems(changes: SalaryChange[], employees: Employee[], today: Date): QueueItem[] {
+  const names = new Map(employees.map((e) => [e.id, `${e.firstName} ${e.lastName}`]));
+  const todayMs = midnight(today).getTime();
+  return changes
+    .filter((change) => change.status === 'Pending')
+    .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+    .map((change) => {
+      const before = previousSalary(changes, change);
+      const startsIn = Math.round((parseDay(change.effectiveDate) - todayMs) / DAY_MS);
+      // A change due within a week has to be decided before payroll runs.
+      const soon = startsIn <= 7;
+      const to = formatMoney(change.baseSalary, change.currency);
+      const move = before
+        ? `${formatMoney(before.baseSalary, before.currency)} → ${to}` +
+          (before.currency === change.currency ? ` (${formatChange(percentChange(before.baseSalary, change.baseSalary))})` : '')
+        : to;
+      return {
+        id: `pay-${change.id}`,
+        kind: 'pay' as const,
+        name: names.get(change.employeeId) ?? `Employee #${change.employeeId}`,
+        what: `${change.reason} · from ${formatRange(change.effectiveDate, change.effectiveDate)}`,
+        note: `${move}${change.proposedBy ? `, proposed by ${change.proposedBy}` : ''}.`,
+        tag: soon ? (startsIn <= 0 ? 'Overdue' : `Starts in ${startsIn} ${startsIn === 1 ? 'day' : 'days'}`) : undefined,
+        tone: soon ? (startsIn <= 0 ? ('danger' as const) : ('warning' as const)) : undefined,
+        urgent: soon,
+        primary: 'Review',
+        secondary: 'Profile',
+        link: ['/compensation', change.employeeId],
+      };
+    });
+}
+
 /**
  * The Home queue: pending time off first (it has a deadline), then hiring
  * steps that are blocking someone else. Urgent items float to the top of
@@ -198,6 +234,7 @@ export function buildDecisionQueue(
   employees: Employee[],
   enrollments: Enrollment[] = [],
   courses: Course[] = [],
+  salaryChanges: SalaryChange[] = [],
   viewer: QueueViewer = EVERYTHING,
   today = new Date(),
 ): QueueItem[] {
@@ -213,17 +250,22 @@ export function buildDecisionQueue(
       : []),
     ...(viewer.canHire ? hiringItems(candidates, employees, today) : []),
     ...trainingItems(training, courses, employees),
+    // Raises others proposed, for the people in HR's scope. Nobody decides their own.
+    ...(viewer.canDecidePay
+      ? payItems(salaryChanges.filter((c) => inScope(scope, c.employeeId) && !own(c.employeeId)), employees, today)
+      : []),
   ];
   return items.sort((a, b) => Number(b.urgent) - Number(a.urgent));
 }
 
 export function countByKind(
   items: QueueItem[],
-): { all: number; timeoff: number; hiring: number; training: number } {
+): { all: number; timeoff: number; hiring: number; training: number; pay: number } {
   return {
     all: items.length,
     timeoff: items.filter((item) => item.kind === 'timeoff').length,
     hiring: items.filter((item) => item.kind === 'hiring').length,
     training: items.filter((item) => item.kind === 'training').length,
+    pay: items.filter((item) => item.kind === 'pay').length,
   };
 }

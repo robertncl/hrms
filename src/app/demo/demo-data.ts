@@ -6,6 +6,7 @@ import { Project } from '../infrastructure/types/project';
 import { TimeOffRequest } from '../infrastructure/types/time-off-request.type';
 import { User } from '../infrastructure/types/user';
 import { nextWorkingDay } from '../shared/functions/leave';
+import { CompensationData, createCompensationData } from './demo-compensation';
 
 export type DemoRole = 'HR Administrator' | 'Team Lead' | 'Recruiter' | 'Learning Coordinator' | 'Employee';
 
@@ -28,7 +29,7 @@ export type DemoDatabase = {
     courses: Course[];
     /** Stored without the derived status/progress fields. */
     enrollments: StoredEnrollment[];
-};
+} & CompensationData;
 
 export type StoredEnrollment = Omit<Enrollment, 'status' | 'progress'>;
 
@@ -36,7 +37,7 @@ export type StoredEnrollment = Omit<Enrollment, 'status' | 'progress'>;
 export const ROLE_PERMISSIONS: Record<DemoRole, Permissions[]> = {
     'HR Administrator': ALL_PERMISSION_NAMES,
     // No OrgWideAccess: a lead approves, edits and assigns only within their own reporting line.
-    'Team Lead': ['ViewEmployees', 'EditEmployeeGeneralDetails', 'ApproveTimeOff', 'ManageHiring', 'AssignTraining'],
+    'Team Lead': ['ViewEmployees', 'EditEmployeeGeneralDetails', 'ApproveTimeOff', 'ManageHiring', 'AssignTraining', 'ViewCompensation'],
     Recruiter: ['ViewEmployees', 'CreateEmployee', 'ManageHiring'],
     'Learning Coordinator': ['ViewEmployees', 'AssignTraining', 'ManageCourses', 'OrgWideAccess'],
     Employee: ['ViewEmployees'],
@@ -62,7 +63,7 @@ export const DEMO_ACCOUNTS: BuiltInDemoAccount[] = [
         email: 'admin@acme.com',
         role: 'HR Administrator',
         password: DEMO_PASSWORD,
-        summary: 'Everything, including private details and removing people.',
+        summary: 'Everything, including private details, pay and equity, and removing people.',
     },
     {
         name: 'Olivia Bennett',
@@ -70,7 +71,7 @@ export const DEMO_ACCOUNTS: BuiltInDemoAccount[] = [
         role: 'Team Lead',
         employeeId: 1,
         password: DEMO_PASSWORD,
-        summary: 'For her own team: approves time off, edits roles and assigns training. Also runs hiring.',
+        summary: 'For her own team: approves time off, edits roles, assigns training, sees pay and proposes raises. Also runs hiring.',
     },
     {
         name: 'Priya Shah',
@@ -92,7 +93,7 @@ export const DEMO_ACCOUNTS: BuiltInDemoAccount[] = [
         role: 'Employee',
         employeeId: 15,
         password: DEMO_PASSWORD,
-        summary: 'Self-service: books her own time off and works through her own training.',
+        summary: 'Self-service: books her own time off, works through her own training and sees her own pay and equity.',
     },
 ];
 
@@ -168,7 +169,7 @@ export function createDemoDatabase(today = new Date()): DemoDatabase {
         details: EmployeeDetails,
     ) => employee(id, firstName, lastName, position, level, details, today);
 
-    return {
+    const db: Omit<DemoDatabase, keyof CompensationData> = {
         users: [],
         // Two reporting lines: Olivia Bennett heads Engineering, with Evelyn Kim's
         // Delivery team under her; Sophia Lindqvist heads Design and Quality.
@@ -281,6 +282,7 @@ export function createDemoDatabase(today = new Date()): DemoDatabase {
         courses: DEMO_COURSES.map(course => ({ ...course, modules: [...course.modules] })),
         enrollments: createDemoEnrollments(today),
     };
+    return { ...db, ...createCompensationData(db.employees, today) };
 }
 
 export const DEMO_COURSES: Course[] = [

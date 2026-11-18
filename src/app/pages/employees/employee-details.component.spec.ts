@@ -22,6 +22,8 @@ import { grantRole } from 'src/testing/roles';
 import { formatLongDate } from 'src/app/shared/functions/tenure';
 import { LeaveBalanceService } from 'src/app/services/leave-balance.service';
 import { LeaveBalance } from 'src/app/shared/functions/leave';
+import { CompensationService } from 'src/app/services/compensation.service';
+import { SalaryChange, StockGrant } from 'src/app/infrastructure/types/compensation';
 
 describe('EmployeeDetailsComponent', () => {
   let component: EmployeeDetailsComponent;
@@ -50,6 +52,21 @@ describe('EmployeeDetailsComponent', () => {
     { employeeId: 1, year: 2026, type: 'Other', entitlement: 3, taken: 3, pending: 0, remaining: 0 },
   ];
   const getBalances = jasmine.createSpy('getBalances').and.returnValue(of(balances));
+  // John is paid in euros (Lisbon), below the €74,000–€100,000 band, with a raise waiting.
+  const salaryChanges: SalaryChange[] = [
+    { id: 1, employeeId: 1, effectiveDate: '2023-03-01', baseSalary: 60_000, currency: 'EUR', reason: 'New hire', status: 'Approved' },
+    { id: 2, employeeId: 1, effectiveDate: '2099-01-01', baseSalary: 76_000, currency: 'EUR', reason: 'Market adjustment', status: 'Pending' },
+  ];
+  const grants: StockGrant[] = [{
+    id: 1, employeeId: 1, kind: 'RSUs', grantDate: '2023-03-01', shares: 480, vestingStart: '2023-03-01',
+    vestingMonths: 12, cliffMonths: 0, exercisedShares: 0,
+  }];
+  const compensation = {
+    getSalaryChanges: jasmine.createSpy('getSalaryChanges').and.returnValue(of(salaryChanges)),
+    getPayBands: () => of([{ id: 1, position: 'Developer', level: 'Senior', currency: 'EUR', min: 74_000, max: 100_000 }]),
+    getGrants: () => of(grants),
+    getSharePrices: () => of([{ id: 1, effectiveDate: '2020-01-01', pricePerShare: 5 }]),
+  };
   const manager: Employee = {
     ...mockEmployee, id: 5, firstName: 'Olivia', lastName: 'Bennett', position: 'Manager', level: 'Lead', managerId: undefined,
   };
@@ -97,6 +114,7 @@ describe('EmployeeDetailsComponent', () => {
         { provide: AuthService, useValue: { currentUser } },
         { provide: EnrollmentService, useValue: mockEnrollmentService },
         { provide: LeaveBalanceService, useValue: { getBalances } },
+        { provide: CompensationService, useValue: compensation },
         {
           provide: CourseService,
           useValue: { getCourses: () => of([course(1, 'Security'), course(2, 'Privacy')]) },
@@ -308,6 +326,39 @@ describe('EmployeeDetailsComponent', () => {
       expect(el().querySelector('a[href="/employees/edit/1"]')).toBeNull();
       expect(el().querySelector('.callout')).toBeNull();
       expect(getBalances).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pay and equity', () => {
+    const card = () => el().querySelector('[aria-labelledby="pay-title"]') as HTMLElement | null;
+
+    it('should show HR the salary, where it sits in the band, equity and any waiting raise', () => {
+      expect(detail('Base salary')).toBe('€60,000 a year Below band');
+      expect(detail('Equity vested')).toBe('$2,400 · 480 shares');
+      expect(detail('Proposed')).toBe('€76,000, waiting for HR');
+      expect(card()!.querySelector('a[href="/compensation/1"]')).not.toBeNull();
+    });
+
+    it('should show people their own pay', () => {
+      render('Employee', 1);
+      expect(card()).not.toBeNull();
+      expect(card()!.textContent).toContain('Only you, your leads and HR see this.');
+    });
+
+    it('should show a lead the pay of the people who report to them', () => {
+      render('Team Lead', 5);
+      expect(card()).not.toBeNull();
+    });
+
+    it("should not even ask for a colleague's pay", () => {
+      compensation.getSalaryChanges.calls.reset();
+      render('Employee', 7);
+      expect(card()).toBeNull();
+      expect(compensation.getSalaryChanges).not.toHaveBeenCalled();
+
+      // Nor for a lead's own manager.
+      render('Team Lead', 7);
+      expect(card()).toBeNull();
     });
   });
 });

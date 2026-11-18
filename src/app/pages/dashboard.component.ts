@@ -9,6 +9,7 @@ import { TimeOffRequestService } from '../services/time-off-request.service';
 import { CandidateService } from '../services/candidate.service';
 import { CourseService } from '../services/course.service';
 import { EnrollmentService } from '../services/enrollment.service';
+import { CompensationService } from '../services/compensation.service';
 import { AuthService } from '../services/auth.service';
 import { PermissionsService } from '../services/permissions.service';
 import { Employee } from '../infrastructure/types/employee';
@@ -327,6 +328,8 @@ export class DashboardComponent {
   canHire = this.permissions.can('ManageHiring');
   private readonly canAssign = this.permissions.can('AssignTraining');
   private readonly orgWide = this.permissions.can('OrgWideAccess');
+  private readonly canDecidePay = this.permissions.can('ManageCompensation');
+  private readonly compensationService = inject(CompensationService);
   canAddPeople = this.permissions.can('CreateEmployee');
   /** Approvers book for anyone; everyone else only for themselves. */
   canRequestTimeOff = computed(() => this.canApprove() || this.user()?.employeeId !== undefined);
@@ -337,6 +340,7 @@ export class DashboardComponent {
     canAssign: this.canAssign(),
     employeeId: this.user()?.employeeId,
     orgWide: this.orgWide(),
+    canDecidePay: this.canDecidePay(),
   }));
 
   readonly today = new Date();
@@ -361,6 +365,8 @@ export class DashboardComponent {
           candidates: this.canHire() ? this.candidateService.getCandidates() : of([]),
           enrollments: this.enrollmentService.getEnrollments(),
           courses: this.courseService.getCourses(),
+          // Only HR decides pay, so only HR needs the proposals.
+          salaryChanges: this.canDecidePay() ? this.compensationService.getSalaryChanges() : of([]),
         }),
       ),
     ),
@@ -407,6 +413,7 @@ export class DashboardComponent {
       this.employees(),
       this.enrollments(),
       this.courses(),
+      this.data()?.salaryChanges ?? [],
       this.viewer(),
     ),
   );
@@ -422,6 +429,7 @@ export class DashboardComponent {
       { kind: 'hiring' as QueueKind, label: 'Hiring', count: counts.hiring, shown: this.canHire() },
       // Training items are either everyone's (assigners) or your own (if you have a People record).
       { kind: 'training' as QueueKind, label: 'Training', count: counts.training, shown: this.canAssign() || this.viewer().employeeId !== undefined },
+      { kind: 'pay' as QueueKind, label: 'Pay', count: counts.pay, shown: this.canDecidePay() },
     ].filter((tab) => tab.shown);
   });
 
