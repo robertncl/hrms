@@ -1,0 +1,680 @@
+/* ==========================================================================
+   Modernist theme — layer 3, on top of styles/acme.css
+
+   Modernist is a Swiss-style system: a flush-left 12-column grid, one
+   grotesque face (Archivo), black rules instead of shadows, square corners,
+   and colour held back for two jobs only. Blue means act or "you are here".
+   The warm data ramp means severity. Everything else is black on white.
+
+   Source of truth: the "Modernist" design system
+   (claude.ai/code/artifact/44285df8-0b09-4344-be22-db320e39cf1f),
+   project/tokens.json + project/README.md. That system ships no component
+   bundle and no tokens.css, so its values are declared here once, in
+   section 1, and everything below uses var() only — no second hex literal.
+
+   Why a separate layer: styles/acme.css is vendored from the ACME Design
+   System and is re-vendored rather than edited. This file re-points the
+   --acme-* tokens the app and that bundle read, then restates the handful
+   of patterns whose shape (not just colour) Modernist defines differently:
+   rules instead of cards, square corners, 44px controls with 2px ink
+   borders, uppercase labels, alerts as a 4px rule with no fill.
+
+   The four principles this file enforces:
+   1. The grid decides — flush left, ragged right, never centred body text.
+   2. Rules, not boxes — 2px rule opens a section, 1px hairlines separate
+      rows, no shadows, no radius, no tinted panels except paper-2 wells.
+   3. Type is the image — big tight headlines, one display per view.
+   4. Two colours with jobs — blue for action and orientation, the data
+      ramp for severity, red for danger. Nothing else is coloured.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Tokens (from Modernist tokens.json)
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Modernist's own palette, named as the system names it --- */
+  --mod-paper: #ffffff;
+  --mod-paper-2: #f1f1ef;
+  --mod-rule: #cfcfcb;
+  --mod-ink: #111111;
+  --mod-ink-2: #454542;
+  --mod-ink-3: #6a6a66;
+  --mod-blue: #1e40d8;
+  --mod-blue-hover: #1631a8;
+  --mod-blue-soft: #e6ebfc;
+  --mod-red: #b3170d;
+
+  /* The severity ramp: lightness falls at every step (L* 100, 85, 68, 48,
+     29, 5), so the steps read apart without relying on hue. Text goes on a
+     step only in its -ink pair. */
+  --mod-data-1: var(--mod-paper);
+  --mod-data-1-ink: var(--mod-ink);
+  --mod-data-2: #f6d21c;
+  --mod-data-2-ink: var(--mod-ink);
+  --mod-data-3: #f08c1e;
+  --mod-data-3-ink: var(--mod-ink);
+  --mod-data-4: #dc2a1e;
+  --mod-data-4-ink: var(--mod-paper);
+  --mod-data-5: #8a1410;
+  --mod-data-5-ink: var(--mod-paper);
+  --mod-data-6: var(--mod-ink);
+  --mod-data-6-ink: var(--mod-paper);
+
+  /* Strokes do the work shadows do elsewhere. */
+  --mod-stroke-hair: 1px;
+  --mod-stroke-rule: 2px;
+  --mod-stroke-alert: 4px;
+  --mod-stroke-bar: 8px;
+
+  /* --- The raw ACME ramps, re-pointed onto Modernist's six neutrals ---
+     Product code is not supposed to read these, but the vendored bundle
+     does in a few places, so they must not stay Graphite. */
+  --acme-gray-0: var(--mod-paper);
+  --acme-gray-50: var(--mod-paper-2);
+  --acme-gray-100: var(--mod-paper-2);
+  --acme-gray-200: var(--mod-rule);
+  --acme-gray-300: var(--mod-rule);
+  --acme-gray-400: var(--mod-ink-3);
+  --acme-gray-500: var(--mod-ink-3);
+  --acme-gray-600: var(--mod-ink-2);
+  --acme-gray-700: var(--mod-ink-2);
+  --acme-gray-800: var(--mod-ink);
+  --acme-gray-900: var(--mod-ink);
+  --acme-gray-950: var(--mod-ink);
+
+  --acme-blue-50: var(--mod-blue-soft);
+  --acme-blue-100: var(--mod-blue-soft);
+  --acme-blue-200: var(--mod-blue);
+  --acme-blue-300: var(--mod-blue);
+  --acme-blue-500: var(--mod-blue);
+  --acme-blue-600: var(--mod-blue);
+  --acme-blue-700: var(--mod-blue);
+  --acme-blue-800: var(--mod-blue-hover);
+
+  --acme-red-50: var(--mod-paper);
+  --acme-red-100: var(--mod-paper);
+  --acme-red-200: var(--mod-red);
+  --acme-red-300: var(--mod-data-4);
+  --acme-red-400: var(--mod-data-4);
+  --acme-red-500: var(--mod-red);
+  --acme-red-600: var(--mod-red);
+  --acme-red-700: var(--mod-red);
+  --acme-red-800: var(--mod-data-5);
+  --acme-red-900: var(--mod-data-5);
+
+  /* Modernist has no green and no amber ink: severity is the data ramp and
+     everything else is black on white. */
+  --acme-green-50: var(--mod-paper);
+  --acme-green-200: var(--mod-ink);
+  --acme-green-600: var(--mod-ink);
+  --acme-green-700: var(--mod-ink);
+  --acme-green-800: var(--mod-ink);
+  --acme-amber-50: var(--mod-data-2);
+  --acme-amber-200: var(--mod-ink);
+  --acme-amber-600: var(--mod-ink-2);
+  --acme-amber-700: var(--mod-ink-2);
+  --acme-amber-800: var(--mod-ink);
+
+  /* --- Semantic aliases: the roles the app actually uses --- */
+  --acme-color-canvas: var(--mod-paper);
+  --acme-color-surface: var(--mod-paper-2);
+  --acme-color-surface-hover: var(--mod-paper-2);
+  --acme-color-surface-raised: var(--mod-paper);
+  --acme-color-border: var(--mod-rule);
+  /* A control edge is never decorative in this system: it is 2px of ink. */
+  --acme-color-border-control: var(--mod-ink);
+  --acme-color-border-strong: var(--mod-ink);
+  --acme-color-text: var(--mod-ink);
+  --acme-color-text-muted: var(--mod-ink-2);
+  --acme-color-text-subtle: var(--mod-ink-3);
+
+  /* The one primary button per view fills blue. Secondary buttons are ink
+     on paper and fill ink on hover — see section 4. */
+  --acme-color-primary: var(--mod-blue);
+  --acme-color-primary-hover: var(--mod-blue-hover);
+  --acme-color-primary-active: var(--mod-blue-hover);
+  --acme-color-on-primary: var(--mod-paper);
+
+  /* There is no logo and no brand hue: a product name is Archivo 800. */
+  --acme-color-mark: var(--mod-ink);
+  --acme-color-accent: var(--mod-ink);
+  --acme-color-accent-soft: var(--mod-paper-2);
+
+  --acme-color-selected: var(--mod-blue);
+  --acme-color-selected-soft: var(--mod-blue-soft);
+  --acme-color-link: var(--mod-blue);
+  --acme-color-link-hover: var(--mod-blue-hover);
+  --acme-color-focus: var(--mod-blue);
+
+  /* Status sets. Each keeps its fill / ink / edge together, and every fill
+     carries an ink edge since data-1 matches the page. Status in this app
+     always travels with its word, so the ink roles stay readable neutrals
+     rather than a yellow that would fail on paper. */
+  --acme-color-success: var(--mod-ink-2);
+  --acme-color-success-soft: var(--mod-data-1);
+  --acme-color-success-soft-text: var(--mod-data-1-ink);
+  --acme-color-success-border: var(--mod-ink);
+  --acme-color-warning: var(--mod-ink-2);
+  --acme-color-warning-soft: var(--mod-data-2);
+  --acme-color-warning-soft-text: var(--mod-data-2-ink);
+  --acme-color-warning-border: var(--mod-ink);
+  --acme-color-danger: var(--mod-red);
+  --acme-color-danger-emphasis: var(--mod-red);
+  --acme-color-danger-emphasis-hover: var(--mod-data-5);
+  --acme-color-danger-soft: var(--mod-paper);
+  --acme-color-danger-soft-text: var(--mod-red);
+  --acme-color-danger-border: var(--mod-red);
+  --acme-color-info: var(--mod-blue);
+  --acme-color-info-soft: var(--mod-blue-soft);
+  --acme-color-info-soft-text: var(--mod-ink);
+  --acme-color-info-border: var(--mod-blue);
+
+  --acme-color-data: var(--mod-ink);
+  --acme-color-data-highlight: var(--mod-blue);
+  --acme-color-scrim: #11111373;
+
+  /* No shadows in this system. */
+  --acme-shadow-sm: none;
+  --acme-shadow-md: none;
+  --acme-shadow-lg: none;
+
+  /* Square. Corners are never rounded except true circles (dots and chart
+     markers), which keep --acme-radius-full. radius-hair is the 2px focus
+     outline, so the ring reads as a ring. */
+  --acme-radius-sm: 0;
+  --acme-radius-md: 0;
+  --acme-radius-lg: 0;
+  --acme-radius-xl: 0;
+
+  /* One family, Archivo, falling back to Helvetica. JetBrains Mono for
+     token names, codes and hex values only.
+
+     Archivo is not self-hosted yet and the page CSP is font-src 'self', so
+     until the five woff2 files land in src/assets/fonts the stack renders
+     in Helvetica / Arial — which is the fallback Modernist names. To turn
+     Archivo on, drop the files in and uncomment the @font-face block below. */
+  --font-sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: var(--font-sans);
+
+  /* Type scale, from Modernist's styles: label 12, small 14, body 16,
+     heading-3 18, heading-2 28, heading-1 44, display 72, figure 96. */
+  --acme-text-xs: 0.75rem;
+  --acme-text-sm: 0.875rem;
+  --acme-text-md: 1rem;
+  --acme-text-lg: 1.125rem;
+  --acme-text-xl: 1.75rem;
+  --acme-text-2xl: 1.75rem;
+  --acme-text-3xl: 2.75rem;
+  --acme-text-4xl: 4.5rem;
+  --acme-text-5xl: 6rem;
+
+  --acme-leading-tight: 1.1;
+  --acme-tracking-tight: -0.02em;
+  --acme-tracking-snug: -0.01em;
+  --acme-tracking-caps: 0.08em;
+}
+
+/*
+@font-face { font-family: "Archivo"; src: url("/assets/fonts/Archivo-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Archivo"; src: url("/assets/fonts/Archivo-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Archivo"; src: url("/assets/fonts/Archivo-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Archivo"; src: url("/assets/fonts/Archivo-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Archivo"; src: url("/assets/fonts/Archivo-ExtraBold.woff2") format("woff2"); font-weight: 800; font-style: normal; font-display: swap; }
+*/
+
+/* --------------------------------------------------------------------------
+   2. Type and the page
+   -------------------------------------------------------------------------- */
+/* Tabular numerals in every table, list and chart: the whole app, since
+   figures are what these screens are about. */
+body {
+  font-variant-numeric: tabular-nums;
+  background: var(--acme-color-canvas);
+}
+
+/* Flush left, ragged right. Headlines at 28px and over take the tracking
+   the system sets. */
+h1 {
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: var(--acme-tracking-tight);
+}
+h2 {
+  line-height: var(--acme-leading-tight);
+  font-weight: 700;
+}
+h3 {
+  font-size: var(--acme-text-lg);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+
+/* The one number a view is about: 96/0.9/700. */
+.figure {
+  font: 700 var(--acme-text-5xl) / 0.9 var(--acme-font-sans);
+  letter-spacing: -0.04em;
+}
+
+/* Uppercase labels over sections and fields. The text itself is written in
+   sentence case in the markup; the case change belongs to the style. */
+.kicker,
+.field > label,
+.field > .label,
+.acme-label,
+.form-sections > .section-label > strong,
+.data-table th,
+.details-list dt {
+  font-size: var(--acme-text-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: var(--acme-tracking-caps);
+  text-transform: uppercase;
+  color: var(--acme-color-text-subtle);
+}
+
+/* Running text stays under 65ch and is never centred. */
+.page-header p,
+.empty-state {
+  max-width: 65ch;
+  text-align: start;
+}
+
+/* Token names, codes and hex values only. */
+.mono,
+code,
+kbd,
+samp {
+  font: 400 0.8125rem / 1.4 var(--acme-font-mono);
+}
+
+/* --------------------------------------------------------------------------
+   3. Rules, not boxes
+   -------------------------------------------------------------------------- */
+/* A card is a section: a 2px rule opens it, and its content sits on the
+   page flush left. No border, no shadow, no radius, no fill. */
+.card,
+.table-wrap,
+.acme-card {
+  border: 0;
+  border-top: var(--mod-stroke-rule) solid var(--acme-color-text);
+  border-radius: 0;
+  background: var(--acme-color-canvas);
+  box-shadow: none;
+  padding: var(--acme-space-4) 0 0;
+  overflow: visible;
+}
+
+/* A section title sits under that rule at heading-2. */
+.card > h2,
+.card-title,
+.card-header h2,
+.card.flush .card-header h2,
+.acme-card__title {
+  font-size: var(--acme-text-2xl);
+  line-height: var(--acme-leading-tight);
+  font-weight: 700;
+  letter-spacing: var(--acme-tracking-snug);
+}
+
+/* Flush cards and their parts lose the inset padding, so every row, tab
+   strip and table in a section starts on the same left edge. */
+/* overflow stays visible so the 2px focus ring, offset 2px, is never
+   clipped by a section edge. */
+.card.flush { padding: var(--acme-space-4) 0 0; overflow: visible; }
+.card.flush .card-header {
+  padding: 0;
+  margin-bottom: 0;
+}
+.card.flush > .tabs { padding: 0; }
+.acme-card__body,
+.acme-card__footer { padding: var(--acme-space-4) 0 0; }
+
+.row-item,
+.rows-footer,
+.table-footer,
+.data-table caption {
+  padding-inline: 0;
+  background: var(--acme-color-canvas);
+}
+
+.row-item { border-top: var(--mod-stroke-hair) solid var(--acme-color-border); }
+.rows-footer,
+.table-footer { border-top: var(--mod-stroke-hair) solid var(--acme-color-border); }
+
+.empty-state,
+.loading { padding-inline: 0; }
+
+/* Recessed wells are the one tinted panel: metric cells, image wells,
+   loading skeletons, row hover. */
+.meter,
+.timeline .t-row,
+.board-col {
+  background: var(--acme-color-surface);
+  border-radius: 0;
+}
+.meter > span,
+.meter { border-radius: 0; }
+.meter > span { background: var(--acme-color-data); }
+
+/* --------------------------------------------------------------------------
+   4. Controls
+   -------------------------------------------------------------------------- */
+:root {
+  /* 44px tall, square. 4px only inside a control. */
+  --app-control-h: 44px;
+  --app-control-h-sm: 36px;
+}
+
+/* Secondary (the default): ink border on paper, 600 weight. Hover fills
+   ink with paper text. */
+.btn,
+.acme-btn {
+  border-width: var(--mod-stroke-rule);
+  border-style: solid;
+  border-color: var(--acme-color-text);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--acme-color-canvas);
+  color: var(--acme-color-text);
+  font-weight: 600;
+  letter-spacing: normal;
+}
+.btn:hover,
+.acme-btn--secondary:hover {
+  background: var(--acme-color-text);
+  border-color: var(--acme-color-text);
+  color: var(--acme-color-canvas);
+}
+.btn:active { background: var(--acme-color-text-muted); border-color: var(--acme-color-text-muted); color: var(--acme-color-canvas); }
+
+/* The one primary action per view fills blue. */
+.btn-primary,
+.acme-btn--primary {
+  background: var(--acme-color-primary);
+  border-color: var(--acme-color-primary);
+  color: var(--acme-color-on-primary);
+}
+.btn-primary:hover,
+.acme-btn--primary:hover {
+  background: var(--acme-color-primary-hover);
+  border-color: var(--acme-color-primary-hover);
+  color: var(--acme-color-on-primary);
+}
+
+/* Danger always carries a word, so the fill can stay red. */
+.btn-danger:hover,
+.acme-btn--danger:hover { color: var(--acme-color-on-primary); }
+
+/* Quiet buttons keep no edge: they are text until hovered. */
+.btn-ghost,
+.btn-quiet-danger,
+.btn-icon,
+.acme-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-ghost:hover,
+.btn-icon:hover,
+.acme-btn--ghost:hover {
+  background: var(--acme-color-surface);
+  border-color: transparent;
+  color: var(--acme-color-text);
+}
+.btn-icon {
+  width: var(--app-control-h);
+  min-width: var(--app-control-h);
+  height: var(--app-control-h);
+}
+
+.btn:disabled,
+.btn:disabled:hover,
+.acme-btn:disabled {
+  background: var(--acme-color-surface);
+  border-color: var(--acme-color-border);
+  color: var(--acme-color-text-subtle);
+}
+
+/* Fields: a label above, then a 44px control with a 2px ink border. */
+.input,
+.field input,
+.field select,
+.field textarea,
+.acme-input,
+.search {
+  border-width: var(--mod-stroke-rule);
+  border-style: solid;
+  border-color: var(--acme-color-text);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--acme-color-canvas);
+}
+.input:hover,
+.field input:hover,
+.field select:hover,
+.field textarea:hover,
+.acme-input:hover { border-color: var(--acme-color-text); }
+
+/* Errors sit under the control and say how to fix it. */
+.field .error-msg,
+.acme-error {
+  font-size: var(--acme-text-sm);
+  color: var(--acme-color-danger);
+}
+.field [aria-invalid='true'],
+.acme-input[aria-invalid='true'] {
+  border-color: var(--acme-color-danger);
+  background: var(--acme-color-canvas);
+}
+
+/* Focus: a 2px blue outline, 2px offset, on every focusable element. */
+:focus-visible {
+  outline: var(--mod-stroke-rule) solid var(--acme-color-focus);
+  outline-offset: 2px;
+  border-radius: var(--acme-radius-hair, 2px);
+}
+
+/* Filter chips: square, ink edge. Blue marks the one that is on. */
+.chip {
+  border-width: var(--mod-stroke-rule);
+  border-color: var(--acme-color-text);
+  border-radius: 0;
+  min-height: var(--app-control-h);
+  padding: 0 var(--acme-space-4);
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--acme-color-text);
+}
+.chip[aria-pressed='true'],
+.chip.is-active {
+  border-color: var(--acme-color-selected);
+  background: var(--acme-color-selected-soft);
+  color: var(--acme-color-selected);
+}
+
+/* Underline tabs: a hairline baseline, a 2px ink indicator on the one
+   selected. Counts are square, never pills. */
+.tabs { border-bottom-width: var(--mod-stroke-hair); font-weight: 600; }
+.tab { padding-block: var(--acme-space-3); }
+.tab[aria-selected='true'],
+.tab.is-active { border-bottom-width: var(--mod-stroke-rule); }
+.tab-count,
+.count-pill,
+.tag {
+  border-radius: 0;
+  background: var(--acme-color-surface);
+  color: var(--acme-color-text);
+}
+
+/* The switch keeps its circle: a true dot is the one round shape allowed. */
+.acme-switch input { border-radius: var(--acme-radius-full); }
+
+/* --------------------------------------------------------------------------
+   5. Status, alerts and tables
+   -------------------------------------------------------------------------- */
+/* Every badge is a ramp step with a 1px ink edge, since data-1 matches the
+   page. Text on a step only in its -ink pair, so the badge is set at 14px
+   and the one step whose pair is paper is set bold. */
+.badge,
+.acme-badge {
+  border-width: var(--mod-stroke-hair);
+  border-color: var(--acme-color-text);
+  border-radius: 0;
+  background: var(--mod-data-1);
+  color: var(--mod-data-1-ink);
+  font-size: var(--acme-text-sm);
+  font-weight: 600;
+  padding: 0 var(--acme-space-2);
+}
+.badge-good { background: var(--mod-data-1); color: var(--mod-data-1-ink); }
+.badge-info,
+.badge-selected {
+  background: var(--acme-color-selected-soft);
+  color: var(--acme-color-info-soft-text);
+  border-color: var(--acme-color-selected);
+}
+.badge-warning { background: var(--mod-data-2); color: var(--mod-data-2-ink); }
+.badge-serious { background: var(--mod-data-3); color: var(--mod-data-3-ink); }
+.badge-critical {
+  background: var(--mod-data-4);
+  color: var(--mod-data-4-ink);
+  font-weight: 700;
+}
+
+/* A status dot is a true circle, and in ink: the label beside it carries
+   the meaning, so no hue is spent here. */
+.status::before { background: var(--acme-color-text); }
+.status.is-away::before,
+.status.is-pending::before { background: var(--acme-color-text); }
+
+/* Alerts and callouts: a 4px ink rule on top (red for danger), a bold
+   title, one or two sentences. No icon boxes, no fill. */
+.alert,
+.callout,
+.acme-alert {
+  border: 0;
+  border-top: var(--mod-stroke-alert) solid var(--acme-color-text);
+  border-radius: 0;
+  background: var(--acme-color-canvas);
+  color: var(--acme-color-text);
+  padding: var(--acme-space-3) 0 0;
+}
+.alert-error,
+.callout-danger,
+.acme-alert--danger {
+  border-top-color: var(--acme-color-danger);
+  background: var(--acme-color-canvas);
+  color: var(--acme-color-text);
+}
+.alert-info,
+.acme-alert--info,
+.acme-alert--success,
+.acme-alert--warning { background: var(--acme-color-canvas); }
+.alert-info a { color: var(--acme-color-link); }
+.callout span,
+.callout-danger span { color: var(--acme-color-text-muted); }
+.acme-alert__title { font-size: var(--acme-text-lg); line-height: 1.25; font-weight: 700; }
+
+/* Tables: a 2px rule under the head, hairlines between rows, paper-2 on
+   hover, blue-soft behind the selected row. */
+.data-table thead {
+  background: var(--acme-color-canvas);
+  border-bottom: var(--mod-stroke-rule) solid var(--acme-color-text);
+}
+.data-table th { white-space: nowrap; }
+.data-table tbody tr:hover { background: var(--acme-color-surface); }
+.data-table tbody tr[aria-selected='true'],
+.data-table tbody tr.is-selected { background: var(--acme-color-selected-soft); }
+.data-table caption { border-bottom-width: var(--mod-stroke-hair); }
+
+/* --------------------------------------------------------------------------
+   6. The app bar, panels and the rest
+   -------------------------------------------------------------------------- */
+/* An 8px ink bar across the top of the page, and a 2px rule under the bar. */
+.acme-topbar {
+  border-block-start: var(--mod-stroke-bar) solid var(--acme-color-text);
+  border-block-end: var(--mod-stroke-rule) solid var(--acme-color-text);
+  background: var(--acme-color-canvas);
+}
+.acme-topbar__link {
+  border-radius: 0;
+  font-weight: 600;
+  padding: var(--acme-space-2) var(--acme-space-3);
+  color: var(--acme-color-text);
+}
+.acme-topbar__link:hover { background: var(--acme-color-surface); color: var(--acme-color-text); }
+/* Blue marks where you are. */
+.acme-topbar__link[aria-current='page'] {
+  background: var(--acme-color-selected-soft);
+  color: var(--acme-color-selected);
+}
+/* A product name is Archivo 800, not a logotype. */
+.acme-wordmark {
+  font-weight: 800;
+  letter-spacing: var(--acme-tracking-tight);
+  text-transform: uppercase;
+}
+.acme-wordmark__mark { background: var(--acme-color-text); border-radius: 0; }
+
+/* Panels and dialogs are sheets of paper with a 2px edge, not raised cards. */
+.panel,
+.panel.panel-popover,
+dialog,
+.acme-modal {
+  border: var(--mod-stroke-rule) solid var(--acme-color-text);
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--acme-color-canvas);
+}
+
+/* An avatar is a box, and boxes are square in this system. */
+.avatar { border-radius: 0; }
+.avatar-stack .avatar { border: var(--mod-stroke-hair) solid var(--acme-color-text); }
+.avatar.is-away { background: var(--mod-data-2); color: var(--mod-data-2-ink); }
+
+/* The hiring board: hairline-edged items on a paper-2 well, no shadow. */
+.board-card {
+  border: var(--mod-stroke-hair) solid var(--acme-color-text);
+  border-radius: 0;
+  background: var(--acme-color-canvas);
+  box-shadow: none;
+}
+.board-card:hover { background: var(--acme-color-surface); border-color: var(--acme-color-text); box-shadow: none; }
+.board-card[aria-current='true'] { outline: var(--mod-stroke-rule) solid var(--acme-color-selected); outline-offset: -2px; }
+.board-col > header { border-bottom: var(--mod-stroke-rule) solid var(--acme-color-text); }
+
+/* Stage progress and the absence timeline: square bars, ink for done,
+   blue for where you are, an outline for what is still waiting. */
+.stages .s-bar { border-radius: 0; background: var(--acme-color-surface); }
+.stages > li.is-done .s-bar { background: var(--acme-color-text); }
+.stages > li.is-current .s-bar { background: var(--acme-color-selected); }
+.timeline .t-bar {
+  border-radius: 0;
+  background: var(--acme-color-text);
+  color: var(--acme-color-canvas);
+}
+.timeline .t-bar.is-pending {
+  background: var(--acme-color-canvas);
+  border: var(--mod-stroke-hair) solid var(--acme-color-text);
+  color: var(--acme-color-text);
+}
+.timeline .t-head.ruled { border-color: var(--acme-color-border); }
+.legend .swatch { border-radius: 0; background: var(--acme-color-text); }
+.legend .swatch.is-pending { background: var(--acme-color-canvas); border: var(--mod-stroke-hair) solid var(--acme-color-text); }
+
+/* The rating scale: square options, ink edge, blue when pressed. */
+.rating .r-option {
+  border-width: var(--mod-stroke-rule);
+  border-color: var(--acme-color-text);
+  border-radius: 0;
+  min-height: var(--app-control-h);
+}
+.rating .r-option[aria-pressed='true'] {
+  border-color: var(--acme-color-selected);
+  background: var(--acme-color-selected-soft);
+  color: var(--acme-color-selected);
+}
+
+/* Description lists: a label above its value, hairlines between. */
+.details-list dd { font-size: var(--acme-text-md); }

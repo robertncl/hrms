@@ -6,6 +6,13 @@
    onto ACME semantic tokens and adds the shared patterns the People screens
    need: decision queues, absence timelines, the hiring board, filter chips.
 
+   Layer 3 is styles/modernist.css, listed after this file in angular.json so
+   it wins on equal specificity. It re-points the --acme-* tokens onto the
+   Modernist design system and squares off the shapes that system defines
+   differently (rules instead of cards, 44px controls, no shadows). Keep this
+   file token-driven and that layer stays enough to retheme the whole app;
+   the notes below describe layer 1's intent, which layer 3 overrides.
+
    Rules carried over from the design system (v5):
    - Light theme only. No prefers-color-scheme, no data-theme switch.
    - Every colour has one job: ink fills the one primary action per view,
